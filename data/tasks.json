@@ -1,3 +1,16 @@
 {
-  "tasks": []
+  "tasks": [
+    {
+      "id": "id_mrls7dga_isfnhe",
+      "subject": "柏で",
+      "sprayDate": "2026-07-16",
+      "comments": {},
+      "orderData": false,
+      "mapDraft": false,
+      "correctionReq": false,
+      "mapConfirmed": false,
+      "duplicate": false,
+      "concierge": false
+    }
+  ]
 }
