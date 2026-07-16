@@ -8,7 +8,7 @@
         "correctionReq": "123"
       },
       "orderData": true,
-      "mapDraft": false,
+      "mapDraft": true,
       "correctionReq": true,
       "mapConfirmed": false,
       "duplicate": false,
