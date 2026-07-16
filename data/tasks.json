@@ -4,7 +4,9 @@
       "id": "id_mrls7dga_isfnhe",
       "subject": "柏で",
       "sprayDate": "2026-07-16",
-      "comments": {},
+      "comments": {
+        "correctionReq": "123"
+      },
       "orderData": false,
       "mapDraft": false,
       "correctionReq": true,
