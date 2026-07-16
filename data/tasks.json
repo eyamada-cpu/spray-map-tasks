@@ -5,7 +5,8 @@
       "subject": "柏で",
       "sprayDate": "2026-07-16",
       "comments": {
-        "correctionReq": "123"
+        "correctionReq": "123",
+        "duplicate": "123456789"
       },
       "orderData": true,
       "mapDraft": true,
