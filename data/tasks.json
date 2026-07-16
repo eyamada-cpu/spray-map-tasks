@@ -20,7 +20,7 @@
       "sprayDate": "2026-07-23",
       "comments": {},
       "orderData": true,
-      "mapDraft": false,
+      "mapDraft": true,
       "correctionReq": true,
       "mapConfirmed": false,
       "duplicate": false,
