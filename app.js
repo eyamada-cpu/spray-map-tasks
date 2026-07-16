@@ -125,8 +125,12 @@ function githubApiUrl(cfg, withRef = true) {
 }
 
 async function githubGetFile(cfg) {
+  // ブラウザがこのGETリクエストをキャッシュしてしまうと、常に古いshaを
+  // 使い続けてしまい、何度リトライしても409が解消しない原因になる。
+  // 毎回必ずネットワークから最新を取得するようにする。
   const res = await fetch(githubApiUrl(cfg), {
     headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' },
+    cache: 'no-store',
   });
   if (res.status === 404) return { notFound: true };
   if (!res.ok) throw new Error(`GitHub読み込みエラー (${res.status}): ${await res.text()}`);
@@ -246,7 +250,12 @@ async function addTask() {
   state.tasks.push(task);
   document.getElementById('inpSubject').value = '';
   document.getElementById('inpDate').value = '';
-  await saveToGitHub(`add task: ${subject}`);
+  const ok = await saveToGitHub(`add task: ${subject}`);
+  if (!ok) {
+    // 保存に失敗したものを画面に残すと「見た目は追加されているのに実は
+    // GitHubには保存されていない」というズレが起きるので、元に戻す。
+    state.tasks = state.tasks.filter((t) => t.id !== task.id);
+  }
   renderSubjectDatalist();
   render();
 }
@@ -255,19 +264,26 @@ async function toggleStage(taskId, stageKey) {
   const t = findTask(taskId);
   if (!t) return;
   t[stageKey] = !t[stageKey];
-  await saveToGitHub(`toggle ${stageKey}: ${t.subject}`);
+  const ok = await saveToGitHub(`toggle ${stageKey}: ${t.subject}`);
+  if (!ok) t[stageKey] = !t[stageKey]; // 保存に失敗したら画面上も元に戻す
   render();
 }
 
 async function editStageComment(taskId, stageKey) {
   const t = findTask(taskId);
   if (!t) return;
-  const current = t.comments[stageKey] || '';
+  const previous = t.comments[stageKey];
+  const current = previous || '';
   const text = window.prompt('コメントを入力してください(空欄で削除できます):', current);
   if (text === null) return;
   if (text.trim() === '') delete t.comments[stageKey];
   else t.comments[stageKey] = text.trim();
-  await saveToGitHub(`comment ${stageKey}: ${t.subject}`);
+  const ok = await saveToGitHub(`comment ${stageKey}: ${t.subject}`);
+  if (!ok) {
+    // 保存に失敗したら元のコメント状態に戻す
+    if (previous === undefined) delete t.comments[stageKey];
+    else t.comments[stageKey] = previous;
+  }
   render();
 }
 
@@ -363,8 +379,10 @@ async function deleteTaskConfirm(taskId) {
   if (!t) return;
   const ok = window.confirm(`「${t.subject}」のタスクを削除します。よろしいですか?`);
   if (!ok) return;
+  const index = state.tasks.indexOf(t);
   state.tasks = state.tasks.filter((x) => x.id !== taskId);
-  await saveToGitHub(`delete task: ${t.subject}`);
+  const saved = await saveToGitHub(`delete task: ${t.subject}`);
+  if (!saved) state.tasks.splice(index, 0, t); // 保存に失敗したら元に戻す
   render();
 }
 
