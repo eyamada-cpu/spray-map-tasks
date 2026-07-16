@@ -22,7 +22,7 @@
       "orderData": true,
       "mapDraft": true,
       "correctionReq": true,
-      "mapConfirmed": false,
+      "mapConfirmed": true,
       "duplicate": false,
       "concierge": false
     }
