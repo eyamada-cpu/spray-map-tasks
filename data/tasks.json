@@ -18,7 +18,9 @@
       "id": "id_mrmw5t6p_jl9w75",
       "subject": "123456789",
       "sprayDate": "2026-07-23",
-      "comments": {},
+      "comments": {
+        "mapConfirmed": "123456"
+      },
       "orderData": true,
       "mapDraft": true,
       "correctionReq": true,
