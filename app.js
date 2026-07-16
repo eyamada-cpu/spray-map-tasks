@@ -182,17 +182,28 @@ async function loadFromGitHub() {
   }
 }
 
-async function saveToGitHub(message) {
+// チェックボックスを連続でクリックすると、1つ前の保存が終わる前に次の保存が
+// 始まってしまい、お互いのshaがずれて409エラーになりやすい。
+// そのため実際の保存処理は必ず1件ずつ順番に実行されるようキューで直列化する。
+let _saveQueue = Promise.resolve();
+
+function saveToGitHub(message) {
   if (state.demoMode || !state.config) {
-    // GitHub未接続時はブラウザ内のみで動作を確認できるデモモード
     render();
-    return true;
+    return Promise.resolve(true);
   }
+  const run = _saveQueue.then(() => saveToGitHubNow(message));
+  // 失敗しても次の保存がキューで止まらないようにしておく
+  _saveQueue = run.catch(() => {});
+  return run;
+}
+
+async function saveToGitHubNow(message) {
   setSyncStatus('loading', '保存中…');
   // 他の人(または同じ人の別画面・ウィジェット)がほぼ同時に保存すると、
   // GitHub側のファイルが少し変わっていて409エラーになることがある。
   // その場合は最新のshaを取り直して数回まで自動リトライする。
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const latest = await githubGetFile(state.config);
@@ -206,6 +217,8 @@ async function saveToGitHub(message) {
       if (isConflict && attempt < MAX_ATTEMPTS) {
         console.warn(`保存が競合したため再試行します (${attempt}/${MAX_ATTEMPTS})`, err);
         setSyncStatus('loading', '競合を解消して再試行中…');
+        const backoff = 150 * attempt + Math.random() * 200;
+        await new Promise((resolve) => setTimeout(resolve, backoff));
         continue;
       }
       console.error(err);
