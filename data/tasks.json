@@ -19,7 +19,7 @@
       "comments": {},
       "orderData": false,
       "mapDraft": false,
-      "correctionReq": false,
+      "correctionReq": true,
       "mapConfirmed": false,
       "duplicate": false,
       "concierge": false
