@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地図作成カレンダー</title>
+<link rel="icon" href="icon.ico">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="app-header__title">
+    <h1>地図作成カレンダー</h1>
+    <span id="syncStatus" class="sync-status">未接続</span>
+  </div>
+  <div class="app-header__actions">
+    <button id="btnReload" class="btn btn--ghost">再読み込み</button>
+    <button id="btnSettings" class="btn">⚙ 設定</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab tab--active" data-tab="list">一覧</button>
+  <button class="tab" data-tab="calendar">カレンダー</button>
+</nav>
+
+<main>
+  <section id="viewList" class="view">
+    <div class="card add-form">
+      <div class="add-form__title">新規タスク追加</div>
+      <div class="add-form__row">
+        <label>実施主体
+          <input type="text" id="inpSubject" list="subjectList" placeholder="例: スカイテック北関東">
+          <datalist id="subjectList"></datalist>
+        </label>
+        <label>散布実施日
+          <input type="date" id="inpDate">
+        </label>
+        <button id="btnAdd" class="btn btn--primary">追加</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend">
+        <span><span class="swatch swatch--pending"></span>未対応</span>
+        <span><span class="swatch swatch--done"></span>対応済み</span>
+        <span><span class="swatch swatch--comment"></span>コメントあり(ホバーで表示・右クリックで編集)</span>
+      </div>
+      <div id="listContainer" class="list-container"></div>
+    </div>
+  </section>
+
+  <section id="viewCalendar" class="view" hidden>
+    <div class="card">
+      <div class="calendar-toolbar">
+        <button id="btnPrevMonth" class="btn btn--ghost">＜ 前月</button>
+        <h2 id="calendarLabel"></h2>
+        <button id="btnNextMonth" class="btn btn--ghost">翌月 ＞</button>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+    <div id="calendarDayPanel" class="calendar-day-panel" hidden></div>
+  </section>
+</main>
+
+<div id="modalSettings" class="modal" hidden>
+  <div class="modal__content">
+    <h2>GitHub接続設定(全社共通)</h2>
+    <p class="modal__hint">
+      ここで入力した内容はこのブラウザに保存されます。社内で1つの共通設定として、
+      全員が同じリポジトリに接続します。値は後日入力する前提で、今は空欄のままでも構いません。
+      デスクトップウィジェットにも同じ内容を入力してください。
+    </p>
+    <label>GitHubユーザー名 / Organization名
+      <input type="text" id="cfgOwner" placeholder="例: tochigi-skytech">
+    </label>
+    <label>リポジトリ名
+      <input type="text" id="cfgRepo" placeholder="例: spray-map-tasks">
+    </label>
+    <label>ブランチ名
+      <input type="text" id="cfgBranch" placeholder="main" value="main">
+    </label>
+    <label>ファイルパス
+      <input type="text" id="cfgPath" placeholder="data/tasks.json" value="data/tasks.json">
+    </label>
+    <label>Personal Access Token
+      <input type="password" id="cfgToken" placeholder="ghp_...">
+    </label>
+    <p id="settingsMessage" class="settings-message"></p>
+    <div class="modal__actions">
+      <button id="btnInitFile" class="btn">tasks.jsonを初期化</button>
+      <button id="btnSettingsCancel" class="btn btn--ghost">閉じる</button>
+      <button id="btnSettingsSave" class="btn btn--primary">保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=2"></script>
+</body>
+</html>
