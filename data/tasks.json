@@ -11,7 +11,7 @@
       "mapDraft": true,
       "correctionReq": true,
       "mapConfirmed": false,
-      "duplicate": false,
+      "duplicate": true,
       "concierge": false
     },
     {
