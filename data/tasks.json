@@ -1,21 +1,6 @@
 {
   "tasks": [
     {
-      "id": "id_mrls7dga_isfnhe",
-      "subject": "柏で",
-      "sprayDate": "2026-07-16",
-      "comments": {
-        "correctionReq": "123",
-        "duplicate": "123456789"
-      },
-      "orderData": true,
-      "mapDraft": true,
-      "correctionReq": true,
-      "mapConfirmed": false,
-      "duplicate": true,
-      "concierge": false
-    },
-    {
       "id": "id_mrmw5t6p_jl9w75",
       "subject": "123456789",
       "sprayDate": "2026-07-23",
@@ -33,5 +18,6 @@
   "subjectFolders": {
     "123456789": "Z:\\全社共有\\千葉支店\\2026年\\04　地図\\01　水稲\\若潮支所【山武センター】\\【山武センター】山武市\\4-2　成東【島】\\地図画像",
     "柏で": "Z:\\全社共有\\千葉支店\\2026年\\04　地図\\01　水稲\\【東葛】\\【東葛】我孫子市\\耕地耕作\\地図画像"
-  }
+  },
+  "subjectMaps": {}
 }
