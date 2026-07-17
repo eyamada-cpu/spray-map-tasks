@@ -25,6 +25,7 @@ const STAGE_GROUPS = [
 const state = {
   config: null,       // { owner, repo, branch, path, token }
   tasks: [],
+  subjectFolders: {}, // { 実施主体名: コワークストレージの保管フォルダURL }
   sha: null,
   demoMode: false,     // GitHub未接続時はサンプルデータで表示
   activeTab: 'list',
@@ -175,6 +176,7 @@ async function loadFromGitHub() {
     }
     state.tasks = (result.data && result.data.tasks) || [];
     state.tasks.forEach((t) => { t.comments = t.comments || {}; });
+    state.subjectFolders = (result.data && result.data.subjectFolders) || {};
     state.sha = result.sha;
     state.demoMode = false;
     setSyncStatus('ok', '接続中: ' + state.config.repo);
@@ -212,7 +214,7 @@ async function saveToGitHubNow(message) {
     try {
       const latest = await githubGetFile(state.config);
       const sha = latest.notFound ? undefined : latest.sha;
-      const newSha = await githubPutFile(state.config, { tasks: state.tasks }, message, sha);
+      const newSha = await githubPutFile(state.config, { tasks: state.tasks, subjectFolders: state.subjectFolders }, message, sha);
       state.sha = newSha;
       setSyncStatus('ok', '接続中: ' + state.config.repo);
       return true;
@@ -334,7 +336,10 @@ function renderList() {
     const overdue = d !== null && d < 0;
     return `
       <tr class="${overdue ? 'row-overdue' : ''}">
-        <td class="col-subject"><span class="subject-pill">${escapeHtml(t.subject)}</span></td>
+        <td class="col-subject">
+          <span class="subject-pill">${escapeHtml(t.subject)}</span>
+          <button class="btn-folder-link ${state.subjectFolders[t.subject] ? 'set' : ''}" data-subject="${escapeHtml(t.subject)}" title="${state.subjectFolders[t.subject] ? '保管フォルダを開く(右クリックで変更)' : '保管フォルダのリンクを設定'}">📁</button>
+        </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
         <td class="spray-date ${urgent ? 'urgent' : ''} ${overdue ? 'overdue-text' : ''}">${formatMD(t.sprayDate)}</td>
         <td style="text-align:center;">
@@ -369,9 +374,37 @@ function renderList() {
     });
   });
 
+  container.querySelectorAll('.btn-folder-link').forEach((btn) => {
+    btn.addEventListener('click', () => openOrSetSubjectFolder(btn.dataset.subject, false));
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openOrSetSubjectFolder(btn.dataset.subject, true);
+    });
+  });
+
   container.querySelectorAll('.btn-delete-task').forEach((btn) => {
     btn.addEventListener('click', () => deleteTaskConfirm(btn.dataset.task));
   });
+}
+
+async function openOrSetSubjectFolder(subject, forceEdit) {
+  const current = state.subjectFolders[subject] || '';
+  if (current && !forceEdit) {
+    window.open(current, '_blank', 'noopener');
+    return;
+  }
+  const url = window.prompt(`\u300c${subject}\u300d\u306e\u4fdd\u7ba1\u30d5\u30a9\u30eb\u30c0\uff08\u30b3\u30ef\u30fc\u30af\u30b9\u30c8\u30ec\u30fc\u30b8\uff09\u306e\u30ea\u30f3\u30af\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\uff08\u7a7a\u6b04\u3067\u524a\u9664\u3067\u304d\u307e\u3059\uff09:`, current);
+  if (url === null) return;
+  const trimmed = url.trim();
+  const previous = state.subjectFolders[subject];
+  if (trimmed === '') delete state.subjectFolders[subject];
+  else state.subjectFolders[subject] = trimmed;
+  const ok = await saveToGitHub(`set folder link: ${subject}`);
+  if (!ok) {
+    if (previous === undefined) delete state.subjectFolders[subject];
+    else state.subjectFolders[subject] = previous;
+  }
+  render();
 }
 
 async function deleteTaskConfirm(taskId) {
@@ -505,9 +538,10 @@ async function handleInitFile() {
       document.getElementById('settingsMessage').className = 'settings-message error';
       return;
     }
-    const newSha = await githubPutFile(cfg, { tasks: [] }, 'initialize tasks.json', undefined);
+    const newSha = await githubPutFile(cfg, { tasks: [], subjectFolders: {} }, 'initialize tasks.json', undefined);
     state.sha = newSha;
     state.tasks = [];
+    state.subjectFolders = {};
     state.demoMode = false;
     document.getElementById('settingsMessage').textContent = 'tasks.jsonを作成しました。';
     document.getElementById('settingsMessage').className = 'settings-message ok';
