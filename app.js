@@ -26,6 +26,7 @@ const state = {
   config: null,       // { owner, repo, branch, path, token }
   tasks: [],
   subjectFolders: {}, // { 実施主体名: コワークストレージの保管フォルダURL }
+  subjectMaps: {},    // { 実施主体名: [ {id, name, path, size, uploadedAt} ] }
   sha: null,
   demoMode: false,     // GitHub未接続時はサンプルデータで表示
   activeTab: 'list',
@@ -155,6 +156,156 @@ async function githubPutFile(cfg, dataObj, message, sha) {
   return (await res.json()).content.sha;
 }
 
+/* ---------- Git Data API(地図データのアップロード用) ---------- */
+// tasks.jsonの読み書きは単純なContents APIで十分だが、画像ファイルは
+// 1MBを超えることがあり、Contents APIでは不安定になりやすい。
+// そのためGit Data API(blob/tree/commit)を直接使い、複数ファイル+
+// tasks.jsonの更新を1つのコミットにまとめて反映する。
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const idx = result.indexOf(',');
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('ファイルの読み込みに失敗しました'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function sanitizeFileName(name) {
+  return String(name || 'file').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+}
+
+async function createBlob(cfg, base64Content) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/blobs`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: base64Content, encoding: 'base64' }),
+  });
+  if (!res.ok) throw new Error(`blob作成エラー (${res.status}): ${await res.text()}`);
+  return (await res.json()).sha;
+}
+
+async function getBranchRefSha(cfg) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/ref/heads/${encodeURIComponent(cfg.branch)}`, {
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`ref取得エラー (${res.status}): ${await res.text()}`);
+  return (await res.json()).object.sha;
+}
+
+async function getCommitTreeSha(cfg, commitSha) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/commits/${commitSha}`, {
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`commit取得エラー (${res.status}): ${await res.text()}`);
+  return (await res.json()).tree.sha;
+}
+
+async function createTree(cfg, baseTreeSha, entries) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/trees`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_tree: baseTreeSha, tree: entries }),
+  });
+  if (!res.ok) throw new Error(`tree作成エラー (${res.status}): ${await res.text()}`);
+  return (await res.json()).sha;
+}
+
+async function createCommitObj(cfg, message, treeSha, parentSha) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/commits`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, tree: treeSha, parents: [parentSha] }),
+  });
+  if (!res.ok) throw new Error(`commit作成エラー (${res.status}): ${await res.text()}`);
+  return (await res.json()).sha;
+}
+
+async function updateBranchRef(cfg, commitSha) {
+  const res = await fetch(`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/git/refs/heads/${encodeURIComponent(cfg.branch)}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sha: commitSha, force: false }),
+  });
+  if (!res.ok) throw new Error(`ref更新エラー (${res.status}): ${await res.text()}`);
+  return true;
+}
+
+// 複数の地図ファイルをアップロードし、tasks.jsonのsubjectMaps更新も
+// 同じコミットにまとめて反映する。他の人の保存と競合したら最新状態を
+// 取り直して自動的に数回まで再試行する。
+async function uploadMapFiles(subject, files) {
+  if (!state.config) {
+    alert('GitHub未接続です。設定画面から接続してください。');
+    return false;
+  }
+  if (!files || files.length === 0) return false;
+  setSyncStatus('loading', 'アップロード中…');
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const blobEntries = [];
+      for (const f of files) {
+        const base64 = await fileToBase64(f);
+        const blobSha = await createBlob(state.config, base64);
+        const id = uid();
+        const safeName = sanitizeFileName(f.name);
+        const path = `maps/${id}-${safeName}`;
+        blobEntries.push({
+          path, mode: '100644', type: 'blob', sha: blobSha,
+          meta: { id, name: f.name, path, size: f.size, uploadedAt: new Date().toISOString() },
+        });
+      }
+
+      const latestFile = await githubGetFile(state.config);
+      const branchSha = await getBranchRefSha(state.config);
+      const baseTreeSha = await getCommitTreeSha(state.config, branchSha);
+
+      const nextTasks = latestFile.notFound ? state.tasks : (latestFile.data.tasks || []);
+      const nextSubjectFolders = latestFile.notFound ? state.subjectFolders : (latestFile.data.subjectFolders || {});
+      const nextSubjectMaps = latestFile.notFound ? { ...state.subjectMaps } : { ...(latestFile.data.subjectMaps || {}) };
+      const list = (nextSubjectMaps[subject] || []).slice();
+      blobEntries.forEach((e) => list.push(e.meta));
+      nextSubjectMaps[subject] = list;
+
+      const tasksJsonContent = JSON.stringify({ tasks: nextTasks, subjectFolders: nextSubjectFolders, subjectMaps: nextSubjectMaps }, null, 2);
+      const tasksBlobSha = await createBlob(state.config, utf8ToB64(tasksJsonContent));
+
+      const treeEntries = blobEntries.map((e) => ({ path: e.path, mode: e.mode, type: e.type, sha: e.sha }));
+      treeEntries.push({ path: state.config.path, mode: '100644', type: 'blob', sha: tasksBlobSha });
+
+      const newTreeSha = await createTree(state.config, baseTreeSha, treeEntries);
+      const newCommitSha = await createCommitObj(state.config, `upload ${blobEntries.length} map file(s): ${subject}`, newTreeSha, branchSha);
+      await updateBranchRef(state.config, newCommitSha);
+
+      state.tasks = nextTasks;
+      state.subjectFolders = nextSubjectFolders;
+      state.subjectMaps = nextSubjectMaps;
+      setSyncStatus('ok', '接続中: ' + state.config.repo);
+      return true;
+    } catch (err) {
+      const isConflict = /\(409\)|\(422\)/.test(err.message);
+      if (isConflict && attempt < MAX_ATTEMPTS) {
+        console.warn(`アップロードが競合したため再試行します (${attempt}/${MAX_ATTEMPTS})`, err);
+        setSyncStatus('loading', '競合を解消して再試行中…');
+        await new Promise((resolve) => setTimeout(resolve, 150 * attempt + Math.random() * 200));
+        continue;
+      }
+      console.error(err);
+      setSyncStatus('error', 'アップロード失敗');
+      alert('アップロードに失敗しました。\n' + err.message);
+      return false;
+    }
+  }
+  return false;
+}
+
 function setSyncStatus(mode, text) {
   const el = document.getElementById('syncStatus');
   el.className = 'sync-status ' + mode;
@@ -177,6 +328,7 @@ async function loadFromGitHub() {
     state.tasks = (result.data && result.data.tasks) || [];
     state.tasks.forEach((t) => { t.comments = t.comments || {}; });
     state.subjectFolders = (result.data && result.data.subjectFolders) || {};
+    state.subjectMaps = (result.data && result.data.subjectMaps) || {};
     state.sha = result.sha;
     state.demoMode = false;
     setSyncStatus('ok', '接続中: ' + state.config.repo);
@@ -214,7 +366,7 @@ async function saveToGitHubNow(message) {
     try {
       const latest = await githubGetFile(state.config);
       const sha = latest.notFound ? undefined : latest.sha;
-      const newSha = await githubPutFile(state.config, { tasks: state.tasks, subjectFolders: state.subjectFolders }, message, sha);
+      const newSha = await githubPutFile(state.config, { tasks: state.tasks, subjectFolders: state.subjectFolders, subjectMaps: state.subjectMaps }, message, sha);
       state.sha = newSha;
       setSyncStatus('ok', '接続中: ' + state.config.repo);
       return true;
@@ -338,7 +490,7 @@ function renderList() {
       <tr class="${overdue ? 'row-overdue' : ''}">
         <td class="col-subject">
           ${folderLinkHtml(t.subject)}
-          <span class="subject-pill">${escapeHtml(t.subject)}</span>
+          <button class="subject-pill subject-pill-btn" data-subject="${escapeHtml(t.subject)}" title="地図データを見る・アップロードする">${escapeHtml(t.subject)}${mapCountBadgeHtml(t.subject)}</button>
         </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
         <td class="spray-date ${urgent ? 'urgent' : ''} ${overdue ? 'overdue-text' : ''}">${formatMD(t.sprayDate)}</td>
@@ -372,6 +524,10 @@ function renderList() {
       e.preventDefault();
       editStageComment(box.dataset.task, box.dataset.stage);
     });
+  });
+
+  container.querySelectorAll('.subject-pill-btn').forEach((btn) => {
+    btn.addEventListener('click', () => openMapPreviewModal(btn.dataset.subject));
   });
 
   container.querySelectorAll('.btn-folder-link').forEach((btn) => {
@@ -490,6 +646,123 @@ async function handleFolderLinkClear() {
   if (!subject) return;
   closeFolderLinkModal();
   await applyFolderLinkChange(subject, '');
+}
+
+/* ---------- 地図データのプレビュー・アップロード・印刷 ---------- */
+
+function mapCountBadgeHtml(subject) {
+  const count = (state.subjectMaps[subject] || []).length;
+  if (count === 0) return '';
+  return ` <span class="map-count-badge">📷${count}</span>`;
+}
+
+let mapPreviewEditingSubject = null;
+
+function openMapPreviewModal(subject) {
+  mapPreviewEditingSubject = subject;
+  document.getElementById('mapPreviewTitle').textContent = `「${subject}」の地図データ`;
+  document.getElementById('mapUploadStatus').textContent = '';
+  document.getElementById('mapUploadStatus').className = 'settings-message';
+  renderMapPreviewGrid(subject);
+  document.getElementById('modalMapPreview').hidden = false;
+}
+
+function closeMapPreviewModal() {
+  document.getElementById('modalMapPreview').hidden = true;
+  mapPreviewEditingSubject = null;
+}
+
+function mapPreviewItemHtml(subject, item) {
+  const isPdf = /\.pdf$/i.test(item.name || '');
+  const thumb = isPdf
+    ? `<div class="map-thumb map-thumb--pdf">PDF</div>`
+    : `<img class="map-thumb" src="${escapeHtml(item.path)}" alt="${escapeHtml(item.name)}" loading="lazy">`;
+  return `
+    <div class="map-preview-item" data-id="${escapeHtml(item.id)}">
+      <label class="map-preview-check">
+        <input type="checkbox" class="map-print-check" value="${escapeHtml(item.path)}" data-type="${isPdf ? 'pdf' : 'image'}">
+        ${thumb}
+      </label>
+      <div class="map-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+      <button class="btn-map-delete" data-subject="${escapeHtml(subject)}" data-id="${escapeHtml(item.id)}" title="削除">×</button>
+    </div>
+  `;
+}
+
+function renderMapPreviewGrid(subject) {
+  const grid = document.getElementById('mapPreviewGrid');
+  const list = state.subjectMaps[subject] || [];
+  if (list.length === 0) {
+    grid.innerHTML = '<p style="color:var(--color-muted);padding:12px 0;">まだ地図データがありません。上の「＋ 地図データを追加」からアップロードしてください。</p>';
+    return;
+  }
+  grid.innerHTML = list.map((item) => mapPreviewItemHtml(subject, item)).join('');
+  grid.querySelectorAll('.btn-map-delete').forEach((btn) => {
+    btn.addEventListener('click', () => deleteMapFile(btn.dataset.subject, btn.dataset.id));
+  });
+}
+
+async function handleMapUploadChange(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (files.length === 0) return;
+  const subject = mapPreviewEditingSubject;
+  if (!subject) return;
+  const statusEl = document.getElementById('mapUploadStatus');
+  statusEl.textContent = `アップロード中… (${files.length}件)`;
+  statusEl.className = 'settings-message';
+  const ok = await uploadMapFiles(subject, files);
+  if (ok) {
+    statusEl.textContent = `✅ ${files.length}件アップロードしました。`;
+    statusEl.className = 'settings-message ok';
+  } else {
+    statusEl.textContent = '';
+  }
+  renderMapPreviewGrid(subject);
+  render();
+}
+
+async function deleteMapFile(subject, id) {
+  const list = state.subjectMaps[subject] || [];
+  const idx = list.findIndex((m) => m.id === id);
+  if (idx === -1) return;
+  const ok = window.confirm('この地図データを一覧から削除しますか?');
+  if (!ok) return;
+  const previous = list.slice();
+  const nextList = list.slice();
+  nextList.splice(idx, 1);
+  state.subjectMaps[subject] = nextList;
+  const saved = await saveToGitHub(`delete map file: ${subject}`);
+  if (!saved) state.subjectMaps[subject] = previous;
+  renderMapPreviewGrid(subject);
+  render();
+}
+
+function printSelectedMaps() {
+  const checked = Array.from(document.querySelectorAll('.map-print-check:checked'));
+  if (checked.length === 0) {
+    alert('印刷する地図データにチェックを入れてください。');
+    return;
+  }
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('ポップアップがブロックされました。ブラウザの設定でこのサイトのポップアップを許可してください。');
+    return;
+  }
+  const partsHtml = checked.map((cb) => {
+    if (cb.dataset.type === 'pdf') {
+      return `<iframe src="${cb.value}" style="width:100%; height:100vh; border:0; page-break-after:always;"></iframe>`;
+    }
+    return `<img src="${cb.value}" style="max-width:100%; page-break-after:always; display:block; margin:0 auto;">`;
+  }).join('');
+  win.document.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>地図データの印刷</title>' +
+    '<style>body{margin:0;} img{width:100%;}</style></head><body>' + partsHtml + '</body></html>'
+  );
+  win.document.close();
+  win.onload = () => {
+    setTimeout(() => { win.print(); }, 400);
+  };
 }
 
 async function deleteTaskConfirm(taskId) {
@@ -623,10 +896,11 @@ async function handleInitFile() {
       document.getElementById('settingsMessage').className = 'settings-message error';
       return;
     }
-    const newSha = await githubPutFile(cfg, { tasks: [], subjectFolders: {} }, 'initialize tasks.json', undefined);
+    const newSha = await githubPutFile(cfg, { tasks: [], subjectFolders: {}, subjectMaps: {} }, 'initialize tasks.json', undefined);
     state.sha = newSha;
     state.tasks = [];
     state.subjectFolders = {};
+    state.subjectMaps = {};
     state.demoMode = false;
     document.getElementById('settingsMessage').textContent = 'tasks.jsonを作成しました。';
     document.getElementById('settingsMessage').className = 'settings-message ok';
@@ -673,6 +947,10 @@ function bindEvents() {
   document.getElementById('btnFolderLinkCancel').addEventListener('click', closeFolderLinkModal);
   document.getElementById('btnFolderLinkSave').addEventListener('click', handleFolderLinkSave);
   document.getElementById('btnFolderLinkClear').addEventListener('click', handleFolderLinkClear);
+
+  document.getElementById('btnMapPreviewClose').addEventListener('click', closeMapPreviewModal);
+  document.getElementById('btnMapPrint').addEventListener('click', printSelectedMaps);
+  document.getElementById('mapUploadInput').addEventListener('change', handleMapUploadChange);
 
   document.getElementById('btnReload').addEventListener('click', () => {
     if (state.demoMode || !state.config) {
