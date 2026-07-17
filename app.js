@@ -337,9 +337,7 @@ function renderList() {
     return `
       <tr class="${overdue ? 'row-overdue' : ''}">
         <td class="col-subject">
-          ${state.subjectFolders[t.subject]
-            ? `<a class="btn-folder-link set" href="${escapeHtml(state.subjectFolders[t.subject])}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(t.subject)}" title="保管フォルダを開く(右クリックで変更)">📁</a>`
-            : `<button class="btn-folder-link" data-subject="${escapeHtml(t.subject)}" title="保管フォルダのリンクを設定">📁</button>`}
+          ${folderLinkHtml(t.subject)}
           <span class="subject-pill">${escapeHtml(t.subject)}</span>
         </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
@@ -377,11 +375,15 @@ function renderList() {
   });
 
   container.querySelectorAll('.btn-folder-link').forEach((btn) => {
-    if (btn.tagName === 'BUTTON') {
+    if (btn.classList.contains('btn-folder-copy')) {
+      // Z:\... のようなWindowsのパスはブラウザから直接開けないため、
+      // クリップボードにコピーしてエクスプローラーに貼り付けてもらう。
+      btn.addEventListener('click', () => copyFolderPath(btn.dataset.path));
+    } else if (btn.tagName === 'BUTTON') {
       // リンク未設定の状態:クリックで設定用のプロンプトを出す
       btn.addEventListener('click', () => openOrSetSubjectFolder(btn.dataset.subject, true));
     }
-    // 設定済みの<a>タグは、左クリックはブラウザ標準のリンク動作(target="_blank")に任せる。
+    // 設定済みでhttp(s)の<a>タグは、左クリックはブラウザ標準のリンク動作(target="_blank")に任せる。
     // window.open()はインストール済みアプリウィンドウ内だと動かないことがあるため使わない。
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -392,6 +394,32 @@ function renderList() {
   container.querySelectorAll('.btn-delete-task').forEach((btn) => {
     btn.addEventListener('click', () => deleteTaskConfirm(btn.dataset.task));
   });
+}
+
+function isHttpUrl(link) {
+  return /^https?:\/\//i.test((link || '').trim());
+}
+
+function folderLinkHtml(subject) {
+  const link = state.subjectFolders[subject];
+  if (!link) {
+    return `<button class="btn-folder-link" data-subject="${escapeHtml(subject)}" title="保管フォルダのリンクを設定">📁</button>`;
+  }
+  if (isHttpUrl(link)) {
+    return `<a class="btn-folder-link set" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(subject)}" title="保管フォルダを開く(右クリックで変更)">📁</a>`;
+  }
+  // Z:\... や \\サーバー\共有 のようなWindowsのフォルダパスはブラウザから直接開けないので、
+  // クリックでパスをコピーする専用ボタンにする。
+  return `<button class="btn-folder-link set btn-folder-copy" data-subject="${escapeHtml(subject)}" data-path="${escapeHtml(link)}" title="フォルダのパスをコピー(右クリックで変更)">📁</button>`;
+}
+
+async function copyFolderPath(path) {
+  try {
+    await navigator.clipboard.writeText(path);
+    alert('フォルダのパスをコピーしました。\nエクスプローラーを開いて、上のアドレス欄に貼り付け(Ctrl+V)してEnterを押してください。\n\n' + path);
+  } catch (err) {
+    window.prompt('自動コピーに失敗しました。以下の内容を手動でコピーしてください:', path);
+  }
 }
 
 async function openOrSetSubjectFolder(subject, forceEdit) {
