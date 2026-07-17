@@ -216,7 +216,7 @@ table.task-table td.col-subject { text-align: left; padding-left: 16px; }
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  margin-left: 4px;
+  margin-right: 4px;
   padding: 2px 5px;
   border-radius: 6px;
   opacity: 0.32;

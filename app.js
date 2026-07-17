@@ -337,8 +337,10 @@ function renderList() {
     return `
       <tr class="${overdue ? 'row-overdue' : ''}">
         <td class="col-subject">
+          ${state.subjectFolders[t.subject]
+            ? `<a class="btn-folder-link set" href="${escapeHtml(state.subjectFolders[t.subject])}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(t.subject)}" title="保管フォルダを開く(右クリックで変更)">📁</a>`
+            : `<button class="btn-folder-link" data-subject="${escapeHtml(t.subject)}" title="保管フォルダのリンクを設定">📁</button>`}
           <span class="subject-pill">${escapeHtml(t.subject)}</span>
-          <button class="btn-folder-link ${state.subjectFolders[t.subject] ? 'set' : ''}" data-subject="${escapeHtml(t.subject)}" title="${state.subjectFolders[t.subject] ? '保管フォルダを開く(右クリックで変更)' : '保管フォルダのリンクを設定'}">📁</button>
         </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
         <td class="spray-date ${urgent ? 'urgent' : ''} ${overdue ? 'overdue-text' : ''}">${formatMD(t.sprayDate)}</td>
@@ -375,7 +377,12 @@ function renderList() {
   });
 
   container.querySelectorAll('.btn-folder-link').forEach((btn) => {
-    btn.addEventListener('click', () => openOrSetSubjectFolder(btn.dataset.subject, false));
+    if (btn.tagName === 'BUTTON') {
+      // リンク未設定の状態:クリックで設定用のプロンプトを出す
+      btn.addEventListener('click', () => openOrSetSubjectFolder(btn.dataset.subject, true));
+    }
+    // 設定済みの<a>タグは、左クリックはブラウザ標準のリンク動作(target="_blank")に任せる。
+    // window.open()はインストール済みアプリウィンドウ内だと動かないことがあるため使わない。
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openOrSetSubjectFolder(btn.dataset.subject, true);
