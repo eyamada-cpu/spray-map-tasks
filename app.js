@@ -380,14 +380,14 @@ function renderList() {
       // クリップボードにコピーしてエクスプローラーに貼り付けてもらう。
       btn.addEventListener('click', () => copyFolderPath(btn.dataset.path));
     } else if (btn.tagName === 'BUTTON') {
-      // リンク未設定の状態:クリックで設定用のプロンプトを出す
-      btn.addEventListener('click', () => openOrSetSubjectFolder(btn.dataset.subject, true));
+      // リンク未設定の状態:クリックで設定用モーダルを開く
+      btn.addEventListener('click', () => openFolderLinkModal(btn.dataset.subject));
     }
     // 設定済みでhttp(s)の<a>タグは、左クリックはブラウザ標準のリンク動作(target="_blank")に任せる。
     // window.open()はインストール済みアプリウィンドウ内だと動かないことがあるため使わない。
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      openOrSetSubjectFolder(btn.dataset.subject, true);
+      openFolderLinkModal(btn.dataset.subject);
     });
   });
 
@@ -422,24 +422,74 @@ async function copyFolderPath(path) {
   }
 }
 
-async function openOrSetSubjectFolder(subject, forceEdit) {
+let folderLinkEditingSubject = null;
+
+function openFolderLinkModal(subject) {
+  folderLinkEditingSubject = subject;
   const current = state.subjectFolders[subject] || '';
-  if (current && !forceEdit) {
-    window.open(current, '_blank', 'noopener');
-    return;
+  document.getElementById('folderLinkSubjectLabel').textContent = `「${subject}」の保管フォルダ(コワークストレージ)を設定します。`;
+  const input = document.getElementById('folderLinkInput');
+  input.value = current;
+  updateFolderLinkPreview();
+  document.getElementById('modalFolderLink').hidden = false;
+  input.focus();
+}
+
+function closeFolderLinkModal() {
+  document.getElementById('modalFolderLink').hidden = true;
+  folderLinkEditingSubject = null;
+}
+
+function updateFolderLinkPreview() {
+  const value = document.getElementById('folderLinkInput').value.trim();
+  const preview = document.getElementById('folderLinkPreview');
+  if (!value) {
+    preview.textContent = '未設定(保存するとフォルダアイコンは非表示になります)';
+    preview.className = 'settings-message';
+  } else if (isHttpUrl(value)) {
+    preview.textContent = '✓ URLとして保存されます。クリックで新しいタブで開きます。';
+    preview.className = 'settings-message ok';
+  } else {
+    preview.textContent = '✓ パソコン内のフォルダパスとして保存されます。クリックでコピーされます(ブラウザはパソコン内のフォルダを直接開けない仕様のため)。';
+    preview.className = 'settings-message ok';
   }
-  const url = window.prompt(`\u300c${subject}\u300d\u306e\u4fdd\u7ba1\u30d5\u30a9\u30eb\u30c0\uff08\u30b3\u30ef\u30fc\u30af\u30b9\u30c8\u30ec\u30fc\u30b8\uff09\u306e\u30ea\u30f3\u30af\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\uff08\u7a7a\u6b04\u3067\u524a\u9664\u3067\u304d\u307e\u3059\uff09:`, current);
-  if (url === null) return;
-  const trimmed = url.trim();
+}
+
+async function handleFolderLinkPaste() {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById('folderLinkInput').value = text;
+    updateFolderLinkPreview();
+  } catch (err) {
+    alert('クリップボードの読み取りに失敗しました。ブラウザが許可をブロックしている可能性があります。入力欄にCtrl+Vで直接貼り付けてください。');
+  }
+}
+
+async function applyFolderLinkChange(subject, trimmedValue) {
   const previous = state.subjectFolders[subject];
-  if (trimmed === '') delete state.subjectFolders[subject];
-  else state.subjectFolders[subject] = trimmed;
+  if (trimmedValue === '') delete state.subjectFolders[subject];
+  else state.subjectFolders[subject] = trimmedValue;
   const ok = await saveToGitHub(`set folder link: ${subject}`);
   if (!ok) {
     if (previous === undefined) delete state.subjectFolders[subject];
     else state.subjectFolders[subject] = previous;
   }
   render();
+}
+
+async function handleFolderLinkSave() {
+  const subject = folderLinkEditingSubject;
+  if (!subject) return;
+  const value = document.getElementById('folderLinkInput').value.trim();
+  closeFolderLinkModal();
+  await applyFolderLinkChange(subject, value);
+}
+
+async function handleFolderLinkClear() {
+  const subject = folderLinkEditingSubject;
+  if (!subject) return;
+  closeFolderLinkModal();
+  await applyFolderLinkChange(subject, '');
 }
 
 async function deleteTaskConfirm(taskId) {
@@ -617,6 +667,12 @@ function bindEvents() {
   document.getElementById('btnSettingsCancel').addEventListener('click', closeSettingsModal);
   document.getElementById('btnSettingsSave').addEventListener('click', handleSettingsSave);
   document.getElementById('btnInitFile').addEventListener('click', handleInitFile);
+
+  document.getElementById('folderLinkInput').addEventListener('input', updateFolderLinkPreview);
+  document.getElementById('btnFolderLinkPaste').addEventListener('click', handleFolderLinkPaste);
+  document.getElementById('btnFolderLinkCancel').addEventListener('click', closeFolderLinkModal);
+  document.getElementById('btnFolderLinkSave').addEventListener('click', handleFolderLinkSave);
+  document.getElementById('btnFolderLinkClear').addEventListener('click', handleFolderLinkClear);
 
   document.getElementById('btnReload').addEventListener('click', () => {
     if (state.demoMode || !state.config) {
