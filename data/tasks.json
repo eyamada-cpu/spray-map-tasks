@@ -1,5 +1,18 @@
 {
-  "tasks": [],
+  "tasks": [
+    {
+      "id": "id_mrocd3bg_rfa9qh",
+      "subject": "123",
+      "sprayDate": "2026-07-24",
+      "comments": {},
+      "orderData": false,
+      "mapDraft": false,
+      "correctionReq": false,
+      "mapConfirmed": false,
+      "duplicate": false,
+      "concierge": false
+    }
+  ],
   "subjectFolders": {
     "123456789": "Z:\\全社共有\\千葉支店\\2026年\\04　地図\\01　水稲\\若潮支所【山武センター】\\【山武センター】山武市\\4-2　成東【島】\\地図画像",
     "柏で": "Z:\\全社共有\\千葉支店\\2026年\\04　地図\\01　水稲\\【東葛】\\【東葛】我孫子市\\耕地耕作\\地図画像"
