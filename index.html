@@ -115,6 +115,24 @@
   </div>
 </div>
 
-<script src="app.js?v=3"></script>
+<div id="modalMapPreview" class="modal" hidden>
+  <div class="modal__content" style="max-width:720px;">
+    <h2 id="mapPreviewTitle"></h2>
+    <div class="modal__actions" style="justify-content:flex-start; margin-top:0; flex-wrap:wrap;">
+      <label class="btn btn--ghost" style="cursor:pointer;">
+        ＋ 地図データを追加
+        <input type="file" id="mapUploadInput" accept="image/*,.pdf" multiple style="display:none;">
+      </label>
+      <button id="btnMapPrint" class="btn btn--ghost" type="button">🖨 選択した画像を印刷</button>
+    </div>
+    <p id="mapUploadStatus" class="settings-message"></p>
+    <div id="mapPreviewGrid" class="map-preview-grid"></div>
+    <div class="modal__actions">
+      <button id="btnMapPreviewClose" class="btn btn--ghost">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=4"></script>
 </body>
 </html>
