@@ -560,17 +560,20 @@ function closeMapPreviewModal() {
 
 function mapPreviewItemHtml(subject, item) {
   const isPdf = /\.pdf$/i.test(item.name || '');
+  const absoluteUrl = new URL(item.path, window.location.href).href;
   const thumb = isPdf
     ? `<div class="map-thumb map-thumb--pdf">PDF</div>`
     : `<img class="map-thumb" src="${escapeHtml(item.path)}" alt="${escapeHtml(item.name)}" loading="lazy">`;
   return `
     <div class="map-preview-item" data-id="${escapeHtml(item.id)}">
-      <label class="map-preview-check">
-        <input type="checkbox" class="map-print-check" value="${escapeHtml(item.path)}" data-type="${isPdf ? 'pdf' : 'image'}">
+      <a class="map-preview-link" href="${escapeHtml(absoluteUrl)}" target="_blank" rel="noopener" title="プレビュー">
         ${thumb}
-      </label>
+      </a>
       <div class="map-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
-      <button class="btn-map-delete" data-subject="${escapeHtml(subject)}" data-id="${escapeHtml(item.id)}" title="削除">×</button>
+      <div class="map-item-actions">
+        <a class="btn-map-save" href="${escapeHtml(absoluteUrl)}" download="${escapeHtml(item.name)}" title="このデータを保存">💾 保存</a>
+        <button class="btn-map-delete" data-subject="${escapeHtml(subject)}" data-id="${escapeHtml(item.id)}" title="削除">削除</button>
+      </div>
     </div>
   `;
 }
@@ -624,104 +627,6 @@ async function deleteMapFile(subject, id) {
   render();
 }
 
-function printSelectedMaps() {
-  const checked = Array.from(document.querySelectorAll('.map-print-check:checked'));
-  if (checked.length === 0) {
-    alert('印刷する地図データにチェックを入れてください。');
-    return;
-  }
-  const win = window.open('', '_blank');
-  if (!win) {
-    alert('ポップアップがブロックされました。ブラウザの設定でこのサイトのポップアップを許可してください。');
-    return;
-  }
-  const partsHtml = checked.map((cb) => {
-    // window.open('', '_blank')で開いた新しいウィンドウはabout:blankが基準になるため、
-    // "maps/xxx.jpg"のような相対パスのままだと画像が読み込めない。
-    // このページ自身のURLを基準に絶対URLへ変換してから埋め込む。
-    const absoluteUrl = new URL(cb.value, window.location.href).href;
-    if (cb.dataset.type === 'pdf') {
-      return `<div class="print-page"><iframe src="${absoluteUrl}" style="width:100%; height:100%; border:0;"></iframe></div>`;
-    }
-    // 用紙サイズいっぱいに収まるよう、縦横比を保ったまま拡大縮小する。
-    // 画像が横長(幅>高さ)の場合は、長い辺が用紙の縦方向に来るよう90度回転させる。
-    // (「frame」というラッパーで向きを回転させ、中のimgは常にframeいっぱいに
-    //  object-fit:containで収める、という2段構えにすることで確実に用紙に収まるようにする)
-    return `<div class="print-page"><div class="print-frame auto-orient"><img src="${absoluteUrl}"></div></div>`;
-  }).join('');
-  const styleTag = `
-    <style>
-      @page { margin: 0; }
-      html, body { margin: 0; padding: 0; }
-      .print-page {
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        page-break-after: always;
-        box-sizing: border-box;
-      }
-      .print-frame {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .print-frame img {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-      .print-frame.rotate {
-        width: 100vh;
-        height: 100vw;
-        transform: rotate(90deg);
-      }
-    </style>
-  `;
-  const scriptTag = `
-    <script>
-      function orientImages() {
-        var frames = document.querySelectorAll('.print-frame.auto-orient');
-        var printed = false;
-        function doPrint() {
-          if (printed) return;
-          printed = true;
-          window.print();
-        }
-        var promises = [];
-        frames.forEach(function (frame) {
-          var img = frame.querySelector('img');
-          promises.push(new Promise(function (resolve) {
-            function apply() {
-              if (img.naturalWidth > img.naturalHeight) frame.classList.add('rotate');
-              resolve();
-            }
-            if (img.complete && img.naturalWidth) apply();
-            else {
-              img.addEventListener('load', apply);
-              img.addEventListener('error', resolve);
-            }
-          }));
-        });
-        Promise.all(promises).then(function () {
-          setTimeout(doPrint, 150);
-        });
-        // 万一画像が読み込めない場合に備えたフォールバック(二重印刷は起きないようprinted済みなら何もしない)
-        setTimeout(doPrint, 8000);
-      }
-    <\/script>
-  `;
-  win.document.write(
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>地図データの印刷</title>' +
-    styleTag + '</head><body>' + partsHtml + scriptTag +
-    '<script>orientImages();<\/script></body></html>'
-  );
-  win.document.close();
-}
 
 // 実施主体の最後のタスクを削除するとき、その実施主体にアップロード済みの
 // 地図データが残っていたら、タスクの削除と同時にリポジトリからも削除する。
@@ -972,7 +877,6 @@ function bindEvents() {
 
 
   document.getElementById('btnMapPreviewClose').addEventListener('click', closeMapPreviewModal);
-  document.getElementById('btnMapPrint').addEventListener('click', printSelectedMaps);
   document.getElementById('mapUploadInput').addEventListener('change', handleMapUploadChange);
 
   document.getElementById('btnReload').addEventListener('click', () => {
