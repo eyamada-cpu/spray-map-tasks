@@ -473,6 +473,11 @@ table.task-table td.spray-date.urgent { color: var(--color-danger); font-weight:
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.map-item-date {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
 .btn-map-delete {
   position: absolute;
   top: 4px;
