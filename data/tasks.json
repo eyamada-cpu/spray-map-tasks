@@ -16,7 +16,9 @@
       "id": "id_mrtzl8fe_802rt4",
       "subject": "123456",
       "sprayDate": "2026-07-28",
-      "comments": {},
+      "comments": {
+        "mapDraft": "123"
+      },
       "orderData": true,
       "mapDraft": true,
       "correctionReq": false,
