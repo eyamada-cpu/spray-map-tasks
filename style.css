@@ -211,20 +211,6 @@ table.task-table td {
   vertical-align: middle;
 }
 table.task-table td.col-subject { text-align: left; padding-left: 16px; }
-.btn-folder-link {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  margin-right: 4px;
-  padding: 2px 5px;
-  border-radius: 6px;
-  opacity: 0.32;
-  vertical-align: middle;
-  filter: grayscale(100%);
-}
-.btn-folder-link:hover { background: var(--color-surface-2); opacity: 1; }
-.btn-folder-link.set { opacity: 1; filter: none; }
 .subject-pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 13.5px; white-space: nowrap; background: #eef2f5; color: #1a2733; border: 1px solid #d7dee4; }
 tr.row-overdue { opacity: 0.55; filter: grayscale(65%); }
 table.task-table td.spray-date { font-size: 15.5px; font-weight: 700; color: var(--color-text); }
