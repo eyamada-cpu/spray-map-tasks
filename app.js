@@ -564,12 +564,14 @@ function mapPreviewItemHtml(subject, item) {
   const thumb = isPdf
     ? `<div class="map-thumb map-thumb--pdf">PDF</div>`
     : `<img class="map-thumb" src="${escapeHtml(item.path)}" alt="${escapeHtml(item.name)}" loading="lazy">`;
+  const uploadedLabel = item.uploadedAt ? formatDateISO(new Date(item.uploadedAt)) : '';
   return `
     <div class="map-preview-item" data-id="${escapeHtml(item.id)}">
       <a class="map-preview-link" href="${escapeHtml(absoluteUrl)}" target="_blank" rel="noopener" title="プレビュー">
         ${thumb}
       </a>
       <div class="map-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+      ${uploadedLabel ? `<div class="map-item-date">📅 ${escapeHtml(uploadedLabel)}</div>` : ''}
       <div class="map-item-actions">
         <a class="btn-map-save" href="${escapeHtml(absoluteUrl)}" download="${escapeHtml(item.name)}" title="このデータを保存">💾 保存</a>
         <button class="btn-map-delete" data-subject="${escapeHtml(subject)}" data-id="${escapeHtml(item.id)}" title="削除">削除</button>
