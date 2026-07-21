@@ -769,10 +769,14 @@ function printSelectedMaps() {
     return;
   }
   const partsHtml = checked.map((cb) => {
+    // window.open('', '_blank')で開いた新しいウィンドウはabout:blankが基準になるため、
+    // "maps/xxx.jpg"のような相対パスのままだと画像が読み込めない。
+    // このページ自身のURLを基準に絶対URLへ変換してから埋め込む。
+    const absoluteUrl = new URL(cb.value, window.location.href).href;
     if (cb.dataset.type === 'pdf') {
-      return `<iframe src="${cb.value}" style="width:100%; height:100vh; border:0; page-break-after:always;"></iframe>`;
+      return `<iframe src="${absoluteUrl}" style="width:100%; height:100vh; border:0; page-break-after:always;"></iframe>`;
     }
-    return `<img src="${cb.value}" style="max-width:100%; page-break-after:always; display:block; margin:0 auto;">`;
+    return `<img src="${absoluteUrl}" style="max-width:100%; page-break-after:always; display:block; margin:0 auto;">`;
   }).join('');
   win.document.write(
     '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>地図データの印刷</title>' +
