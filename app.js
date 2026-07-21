@@ -489,7 +489,6 @@ function renderList() {
     return `
       <tr class="${overdue ? 'row-overdue' : ''}">
         <td class="col-subject">
-          ${folderLinkHtml(t.subject)}
           <button class="subject-pill subject-pill-btn" data-subject="${escapeHtml(t.subject)}" title="地図データを見る・アップロードする">${escapeHtml(t.subject)}${mapCountBadgeHtml(t.subject)}</button>
         </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
@@ -530,141 +529,9 @@ function renderList() {
     btn.addEventListener('click', () => openMapPreviewModal(btn.dataset.subject));
   });
 
-  container.querySelectorAll('.btn-folder-link').forEach((btn) => {
-    if (btn.classList.contains('btn-folder-copy')) {
-      // Z:\... のようなWindowsのパスはブラウザから直接開けないため、
-      // クリップボードにコピーしてエクスプローラーに貼り付けてもらう。
-      btn.addEventListener('click', () => copyFolderPath(btn.dataset.path));
-    } else if (btn.classList.contains('btn-folder-file')) {
-      // file://リンクはtarget="_blank"での直接オープンを試みつつ、
-      // ブロックされて何も起きない場合に備えて同時にパスもコピーしておく。
-      btn.addEventListener('click', () => {
-        navigator.clipboard.writeText(btn.dataset.path).catch(() => {});
-      });
-    } else if (btn.tagName === 'BUTTON') {
-      // リンク未設定の状態:クリックで設定用モーダルを開く
-      btn.addEventListener('click', () => openFolderLinkModal(btn.dataset.subject));
-    }
-    // 設定済みでhttp(s)の<a>タグは、左クリックはブラウザ標準のリンク動作(target="_blank")に任せる。
-    // window.open()はインストール済みアプリウィンドウ内だと動かないことがあるため使わない。
-    btn.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      openFolderLinkModal(btn.dataset.subject);
-    });
-  });
-
   container.querySelectorAll('.btn-delete-task').forEach((btn) => {
     btn.addEventListener('click', () => deleteTaskConfirm(btn.dataset.task));
   });
-}
-
-function isHttpUrl(link) {
-  return /^https?:\/\//i.test((link || '').trim());
-}
-
-function isFileUrl(link) {
-  return /^file:\/\/\//i.test((link || '').trim());
-}
-
-function folderLinkHtml(subject) {
-  const link = state.subjectFolders[subject];
-  if (!link) {
-    return `<button class="btn-folder-link" data-subject="${escapeHtml(subject)}" title="保管フォルダのリンクを設定">📁</button>`;
-  }
-  if (isHttpUrl(link)) {
-    return `<a class="btn-folder-link set" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(subject)}" title="保管フォルダを開く(右クリックで変更)">📁</a>`;
-  }
-  if (isFileUrl(link)) {
-    // file:// 形式のリンクはブラウザによっては開ける場合があるので試す。
-    // ただしセキュリティ上ブロックされて何も起きないブラウザも多いため、
-    // クリック時に念のためパスもコピーしておき、開けなくても貼り付けで対応できるようにする。
-    return `<a class="btn-folder-link set btn-folder-file" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(subject)}" data-path="${escapeHtml(link)}" title="クリックで開く(開けない場合はコピーされます・右クリックで変更)">📁</a>`;
-  }
-  // Z:\... や \\サーバー\共有 のようなWindowsのフォルダパスはブラウザから直接開けないので、
-  // クリックでパスをコピーする専用ボタンにする。
-  return `<button class="btn-folder-link set btn-folder-copy" data-subject="${escapeHtml(subject)}" data-path="${escapeHtml(link)}" title="フォルダのパスをコピー(右クリックで変更)">📁</button>`;
-}
-
-async function copyFolderPath(path) {
-  try {
-    await navigator.clipboard.writeText(path);
-    alert('フォルダのパスをコピーしました。\nエクスプローラーを開いて、上のアドレス欄に貼り付け(Ctrl+V)してEnterを押してください。\n\n' + path);
-  } catch (err) {
-    window.prompt('自動コピーに失敗しました。以下の内容を手動でコピーしてください:', path);
-  }
-}
-
-let folderLinkEditingSubject = null;
-
-function openFolderLinkModal(subject) {
-  folderLinkEditingSubject = subject;
-  const current = state.subjectFolders[subject] || '';
-  document.getElementById('folderLinkSubjectLabel').textContent = `「${subject}」の保管フォルダ(コワークストレージ)を設定します。`;
-  const input = document.getElementById('folderLinkInput');
-  input.value = current;
-  updateFolderLinkPreview();
-  document.getElementById('modalFolderLink').hidden = false;
-  input.focus();
-}
-
-function closeFolderLinkModal() {
-  document.getElementById('modalFolderLink').hidden = true;
-  folderLinkEditingSubject = null;
-}
-
-function updateFolderLinkPreview() {
-  const value = document.getElementById('folderLinkInput').value.trim();
-  const preview = document.getElementById('folderLinkPreview');
-  if (!value) {
-    preview.textContent = '未設定(保存するとフォルダアイコンは非表示になります)';
-    preview.className = 'settings-message';
-  } else if (isHttpUrl(value)) {
-    preview.textContent = '✓ URLとして保存されます。クリックで新しいタブで開きます。';
-    preview.className = 'settings-message ok';
-  } else if (isFileUrl(value)) {
-    preview.textContent = '✓ file:// 形式のリンクとして保存されます。クリックで開けるか試みつつ、開けない場合に備えてパスも自動でコピーされます。';
-    preview.className = 'settings-message ok';
-  } else {
-    preview.textContent = '✓ パソコン内のフォルダパスとして保存されます。クリックでコピーされます(ブラウザはパソコン内のフォルダを直接開けない仕様のため)。';
-    preview.className = 'settings-message ok';
-  }
-}
-
-async function handleFolderLinkPaste() {
-  try {
-    const text = await navigator.clipboard.readText();
-    document.getElementById('folderLinkInput').value = text;
-    updateFolderLinkPreview();
-  } catch (err) {
-    alert('クリップボードの読み取りに失敗しました。ブラウザが許可をブロックしている可能性があります。入力欄にCtrl+Vで直接貼り付けてください。');
-  }
-}
-
-async function applyFolderLinkChange(subject, trimmedValue) {
-  const previous = state.subjectFolders[subject];
-  if (trimmedValue === '') delete state.subjectFolders[subject];
-  else state.subjectFolders[subject] = trimmedValue;
-  const ok = await saveToGitHub(`set folder link: ${subject}`);
-  if (!ok) {
-    if (previous === undefined) delete state.subjectFolders[subject];
-    else state.subjectFolders[subject] = previous;
-  }
-  render();
-}
-
-async function handleFolderLinkSave() {
-  const subject = folderLinkEditingSubject;
-  if (!subject) return;
-  const value = document.getElementById('folderLinkInput').value.trim();
-  closeFolderLinkModal();
-  await applyFolderLinkChange(subject, value);
-}
-
-async function handleFolderLinkClear() {
-  const subject = folderLinkEditingSubject;
-  if (!subject) return;
-  closeFolderLinkModal();
-  await applyFolderLinkChange(subject, '');
 }
 
 /* ---------- 地図データのプレビュー・アップロード・印刷 ---------- */
@@ -776,11 +643,13 @@ function printSelectedMaps() {
     if (cb.dataset.type === 'pdf') {
       return `<iframe src="${absoluteUrl}" style="width:100%; height:100vh; border:0; page-break-after:always;"></iframe>`;
     }
-    return `<img src="${absoluteUrl}" style="max-width:100%; page-break-after:always; display:block; margin:0 auto;">`;
+    // 元の画像データと同じサイズで印刷したいので、幅を100%に引き伸ばしたりしない。
+    // widthやheightを指定せず、画像本来のピクセルサイズのまま表示する。
+    return `<img src="${absoluteUrl}" style="page-break-after:always; display:block; margin:0 auto;">`;
   }).join('');
   win.document.write(
     '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>地図データの印刷</title>' +
-    '<style>body{margin:0;} img{width:100%;}</style></head><body>' + partsHtml + '</body></html>'
+    '<style>body{margin:0;} img{display:block;}</style></head><body>' + partsHtml + '</body></html>'
   );
   win.document.close();
   win.onload = () => {
@@ -1035,11 +904,6 @@ function bindEvents() {
   document.getElementById('btnSettingsSave').addEventListener('click', handleSettingsSave);
   document.getElementById('btnInitFile').addEventListener('click', handleInitFile);
 
-  document.getElementById('folderLinkInput').addEventListener('input', updateFolderLinkPreview);
-  document.getElementById('btnFolderLinkPaste').addEventListener('click', handleFolderLinkPaste);
-  document.getElementById('btnFolderLinkCancel').addEventListener('click', closeFolderLinkModal);
-  document.getElementById('btnFolderLinkSave').addEventListener('click', handleFolderLinkSave);
-  document.getElementById('btnFolderLinkClear').addEventListener('click', handleFolderLinkClear);
 
   document.getElementById('btnMapPreviewClose').addEventListener('click', closeMapPreviewModal);
   document.getElementById('btnMapPrint').addEventListener('click', printSelectedMaps);
