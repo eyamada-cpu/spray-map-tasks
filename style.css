@@ -445,19 +445,9 @@ table.task-table td.spray-date.urgent { color: var(--color-danger); font-weight:
   padding: 8px;
   background: var(--color-surface-2);
 }
-.map-preview-check {
+.map-preview-link {
   display: block;
-  cursor: pointer;
   position: relative;
-}
-.map-preview-check input[type="checkbox"] {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 18px;
-  height: 18px;
-  z-index: 2;
-  cursor: pointer;
 }
 .map-thumb {
   display: block;
@@ -498,6 +488,30 @@ table.task-table td.spray-date.urgent { color: var(--color-danger); font-weight:
   font-size: 14px;
 }
 .btn-map-delete:hover { background: #fdeceb; }
+.map-item-actions {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.btn-map-save {
+  font-size: 12px;
+  color: var(--color-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-map-save:hover { text-decoration: underline; }
+.map-item-actions .btn-map-delete {
+  position: static;
+  background: transparent;
+  font-size: 12px;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  padding: 0;
+}
+.map-item-actions .btn-map-delete:hover { text-decoration: underline; background: transparent; }
 
 @media (max-width: 720px) {
   .stage-box { width: 34px; height: 32px; font-size: 13px; }
