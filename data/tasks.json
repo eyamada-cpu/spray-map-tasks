@@ -1,5 +1,18 @@
 {
-  "tasks": [],
+  "tasks": [
+    {
+      "id": "id_mrtyo7sd_y2cum3",
+      "subject": "123",
+      "sprayDate": "2026-07-28",
+      "comments": {},
+      "orderData": false,
+      "mapDraft": false,
+      "correctionReq": false,
+      "mapConfirmed": false,
+      "duplicate": false,
+      "concierge": false
+    }
+  ],
   "subjectFolders": {
     "123": "file:///Z:/%E5%85%A8%E7%A4%BE%E5%85%B1%E6%9C%89/%E5%8D%83%E8%91%89%E6%94%AF%E5%BA%97/2026%E5%B9%B4/04%E3%80%80%E5%9C%B0%E5%9B%B3/01%E3%80%80%E6%B0%B4%E7%A8%B2/%E3%80%90%E6%9D%B1%E8%91%9B%E3%80%91/%E3%80%90%E6%9D%B1%E8%91%9B%E3%80%91%E6%88%91%E5%AD%AB%E5%AD%90%E5%B8%82/%E8%80%95%E5%9C%B0%E8%80%95%E4%BD%9C/%E5%9C%B0%E5%9B%B3%E7%94%BB%E5%83%8F/%E4%B9%85%E5%AF%BA%E5%AE%B6.jpeg",
     "123456789": "Z:\\全社共有\\千葉支店\\2026年\\04　地図\\01　水稲\\若潮支所【山武センター】\\【山武センター】山武市\\4-2　成東【島】\\地図画像",
