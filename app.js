@@ -645,12 +645,14 @@ function printSelectedMaps() {
     }
     // 用紙サイズいっぱいに収まるよう、縦横比を保ったまま拡大縮小する。
     // 画像が横長(幅>高さ)の場合は、長い辺が用紙の縦方向に来るよう90度回転させる。
-    return `<div class="print-page"><img class="auto-orient" src="${absoluteUrl}"></div>`;
+    // (「frame」というラッパーで向きを回転させ、中のimgは常にframeいっぱいに
+    //  object-fit:containで収める、という2段構えにすることで確実に用紙に収まるようにする)
+    return `<div class="print-page"><div class="print-frame auto-orient"><img src="${absoluteUrl}"></div></div>`;
   }).join('');
   const styleTag = `
     <style>
       @page { margin: 0; }
-      body { margin: 0; }
+      html, body { margin: 0; padding: 0; }
       .print-page {
         width: 100vw;
         height: 100vh;
@@ -661,14 +663,21 @@ function printSelectedMaps() {
         page-break-after: always;
         box-sizing: border-box;
       }
-      .print-page img {
-        max-width: 100%;
-        max-height: 100%;
+      .print-frame {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .print-frame img {
+        width: 100%;
+        height: 100%;
         object-fit: contain;
       }
-      .print-page img.rotate {
-        max-width: 100vh;
-        max-height: 100vw;
+      .print-frame.rotate {
+        width: 100vh;
+        height: 100vw;
         transform: rotate(90deg);
       }
     </style>
@@ -676,7 +685,7 @@ function printSelectedMaps() {
   const scriptTag = `
     <script>
       function orientImages() {
-        var imgs = document.querySelectorAll('img.auto-orient');
+        var frames = document.querySelectorAll('.print-frame.auto-orient');
         var printed = false;
         function doPrint() {
           if (printed) return;
@@ -684,10 +693,11 @@ function printSelectedMaps() {
           window.print();
         }
         var promises = [];
-        imgs.forEach(function (img) {
+        frames.forEach(function (frame) {
+          var img = frame.querySelector('img');
           promises.push(new Promise(function (resolve) {
             function apply() {
-              if (img.naturalWidth > img.naturalHeight) img.classList.add('rotate');
+              if (img.naturalWidth > img.naturalHeight) frame.classList.add('rotate');
               resolve();
             }
             if (img.complete && img.naturalWidth) apply();
