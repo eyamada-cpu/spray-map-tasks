@@ -641,20 +641,76 @@ function printSelectedMaps() {
     // このページ自身のURLを基準に絶対URLへ変換してから埋め込む。
     const absoluteUrl = new URL(cb.value, window.location.href).href;
     if (cb.dataset.type === 'pdf') {
-      return `<iframe src="${absoluteUrl}" style="width:100%; height:100vh; border:0; page-break-after:always;"></iframe>`;
+      return `<div class="print-page"><iframe src="${absoluteUrl}" style="width:100%; height:100%; border:0;"></iframe></div>`;
     }
-    // 元の画像データと同じサイズで印刷したいので、幅を100%に引き伸ばしたりしない。
-    // widthやheightを指定せず、画像本来のピクセルサイズのまま表示する。
-    return `<img src="${absoluteUrl}" style="page-break-after:always; display:block; margin:0 auto;">`;
+    // 用紙サイズいっぱいに収まるよう、縦横比を保ったまま拡大縮小する。
+    // 画像が横長(幅>高さ)の場合は、長い辺が用紙の縦方向に来るよう90度回転させる。
+    return `<div class="print-page"><img class="auto-orient" src="${absoluteUrl}"></div>`;
   }).join('');
+  const styleTag = `
+    <style>
+      @page { margin: 0; }
+      body { margin: 0; }
+      .print-page {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        page-break-after: always;
+        box-sizing: border-box;
+      }
+      .print-page img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      .print-page img.rotate {
+        max-width: 100vh;
+        max-height: 100vw;
+        transform: rotate(90deg);
+      }
+    </style>
+  `;
+  const scriptTag = `
+    <script>
+      function orientImages() {
+        var imgs = document.querySelectorAll('img.auto-orient');
+        var printed = false;
+        function doPrint() {
+          if (printed) return;
+          printed = true;
+          window.print();
+        }
+        var promises = [];
+        imgs.forEach(function (img) {
+          promises.push(new Promise(function (resolve) {
+            function apply() {
+              if (img.naturalWidth > img.naturalHeight) img.classList.add('rotate');
+              resolve();
+            }
+            if (img.complete && img.naturalWidth) apply();
+            else {
+              img.addEventListener('load', apply);
+              img.addEventListener('error', resolve);
+            }
+          }));
+        });
+        Promise.all(promises).then(function () {
+          setTimeout(doPrint, 150);
+        });
+        // 万一画像が読み込めない場合に備えたフォールバック(二重印刷は起きないようprinted済みなら何もしない)
+        setTimeout(doPrint, 8000);
+      }
+    <\/script>
+  `;
   win.document.write(
     '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>地図データの印刷</title>' +
-    '<style>body{margin:0;} img{display:block;}</style></head><body>' + partsHtml + '</body></html>'
+    styleTag + '</head><body>' + partsHtml + scriptTag +
+    '<script>orientImages();<\/script></body></html>'
   );
   win.document.close();
-  win.onload = () => {
-    setTimeout(() => { win.print(); }, 400);
-  };
 }
 
 // 実施主体の最後のタスクを削除するとき、その実施主体にアップロード済みの
