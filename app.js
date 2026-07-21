@@ -535,6 +535,12 @@ function renderList() {
       // Z:\... のようなWindowsのパスはブラウザから直接開けないため、
       // クリップボードにコピーしてエクスプローラーに貼り付けてもらう。
       btn.addEventListener('click', () => copyFolderPath(btn.dataset.path));
+    } else if (btn.classList.contains('btn-folder-file')) {
+      // file://リンクはtarget="_blank"での直接オープンを試みつつ、
+      // ブロックされて何も起きない場合に備えて同時にパスもコピーしておく。
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.path).catch(() => {});
+      });
     } else if (btn.tagName === 'BUTTON') {
       // リンク未設定の状態:クリックで設定用モーダルを開く
       btn.addEventListener('click', () => openFolderLinkModal(btn.dataset.subject));
@@ -556,6 +562,10 @@ function isHttpUrl(link) {
   return /^https?:\/\//i.test((link || '').trim());
 }
 
+function isFileUrl(link) {
+  return /^file:\/\/\//i.test((link || '').trim());
+}
+
 function folderLinkHtml(subject) {
   const link = state.subjectFolders[subject];
   if (!link) {
@@ -563,6 +573,12 @@ function folderLinkHtml(subject) {
   }
   if (isHttpUrl(link)) {
     return `<a class="btn-folder-link set" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(subject)}" title="保管フォルダを開く(右クリックで変更)">📁</a>`;
+  }
+  if (isFileUrl(link)) {
+    // file:// 形式のリンクはブラウザによっては開ける場合があるので試す。
+    // ただしセキュリティ上ブロックされて何も起きないブラウザも多いため、
+    // クリック時に念のためパスもコピーしておき、開けなくても貼り付けで対応できるようにする。
+    return `<a class="btn-folder-link set btn-folder-file" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" data-subject="${escapeHtml(subject)}" data-path="${escapeHtml(link)}" title="クリックで開く(開けない場合はコピーされます・右クリックで変更)">📁</a>`;
   }
   // Z:\... や \\サーバー\共有 のようなWindowsのフォルダパスはブラウザから直接開けないので、
   // クリックでパスをコピーする専用ボタンにする。
@@ -604,6 +620,9 @@ function updateFolderLinkPreview() {
     preview.className = 'settings-message';
   } else if (isHttpUrl(value)) {
     preview.textContent = '✓ URLとして保存されます。クリックで新しいタブで開きます。';
+    preview.className = 'settings-message ok';
+  } else if (isFileUrl(value)) {
+    preview.textContent = '✓ file:// 形式のリンクとして保存されます。クリックで開けるか試みつつ、開けない場合に備えてパスも自動でコピーされます。';
     preview.className = 'settings-message ok';
   } else {
     preview.textContent = '✓ パソコン内のフォルダパスとして保存されます。クリックでコピーされます(ブラウザはパソコン内のフォルダを直接開けない仕様のため)。';
@@ -765,15 +784,85 @@ function printSelectedMaps() {
   };
 }
 
+// 実施主体の最後のタスクを削除するとき、その実施主体にアップロード済みの
+// 地図データが残っていたら、タスクの削除と同時にリポジトリからも削除する。
+// (地図データだけがGitHub上に残り続けてしまう「ゴミ」を防ぐため)
+async function deleteTaskWithMapCleanup(subject, taskId, pathsToRemove) {
+  setSyncStatus('loading', '削除中…');
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const latestFile = await githubGetFile(state.config);
+      const branchSha = await getBranchRefSha(state.config);
+      const baseTreeSha = await getCommitTreeSha(state.config, branchSha);
+
+      const serverTasks = latestFile.notFound ? [] : (latestFile.data.tasks || []);
+      const serverSubjectFolders = latestFile.notFound ? {} : (latestFile.data.subjectFolders || {});
+      const serverSubjectMaps = latestFile.notFound ? {} : (latestFile.data.subjectMaps || {});
+
+      const nextTasks = serverTasks.filter((x) => x.id !== taskId);
+      const nextSubjectMaps = { ...serverSubjectMaps };
+      delete nextSubjectMaps[subject];
+
+      const tasksJsonContent = JSON.stringify({ tasks: nextTasks, subjectFolders: serverSubjectFolders, subjectMaps: nextSubjectMaps }, null, 2);
+      const tasksBlobSha = await createBlob(state.config, utf8ToB64(tasksJsonContent));
+
+      const treeEntries = pathsToRemove.map((p) => ({ path: p, mode: '100644', type: 'blob', sha: null }));
+      treeEntries.push({ path: state.config.path, mode: '100644', type: 'blob', sha: tasksBlobSha });
+
+      const newTreeSha = await createTree(state.config, baseTreeSha, treeEntries);
+      const newCommitSha = await createCommitObj(state.config, `delete task and map files: ${subject}`, newTreeSha, branchSha);
+      await updateBranchRef(state.config, newCommitSha);
+
+      state.tasks = nextTasks;
+      state.subjectFolders = serverSubjectFolders;
+      state.subjectMaps = nextSubjectMaps;
+      setSyncStatus('ok', '接続中: ' + state.config.repo);
+      return true;
+    } catch (err) {
+      const isConflict = /\(409\)|\(422\)/.test(err.message);
+      if (isConflict && attempt < MAX_ATTEMPTS) {
+        console.warn(`削除が競合したため再試行します (${attempt}/${MAX_ATTEMPTS})`, err);
+        setSyncStatus('loading', '競合を解消して再試行中…');
+        await new Promise((resolve) => setTimeout(resolve, 150 * attempt + Math.random() * 200));
+        continue;
+      }
+      console.error(err);
+      setSyncStatus('error', '削除失敗');
+      alert('削除に失敗しました。\n' + err.message);
+      return false;
+    }
+  }
+  return false;
+}
+
 async function deleteTaskConfirm(taskId) {
   const t = findTask(taskId);
   if (!t) return;
   const ok = window.confirm(`「${t.subject}」のタスクを削除します。よろしいですか?`);
   if (!ok) return;
+
+  const subject = t.subject;
   const index = state.tasks.indexOf(t);
+  const mapFiles = state.subjectMaps[subject] || [];
+  const remainingForSubject = state.tasks.filter((x) => x.id !== taskId && x.subject === subject);
+  // この実施主体の最後のタスクで、かつ地図データが残っている場合だけ、
+  // タスク削除とあわせて地図データもリポジトリから消す。
+  const shouldCleanupMaps = !state.demoMode && !!state.config && remainingForSubject.length === 0 && mapFiles.length > 0;
+
   state.tasks = state.tasks.filter((x) => x.id !== taskId);
-  const saved = await saveToGitHub(`delete task: ${t.subject}`);
-  if (!saved) state.tasks.splice(index, 0, t); // 保存に失敗したら元に戻す
+
+  let saved;
+  if (shouldCleanupMaps) {
+    saved = await deleteTaskWithMapCleanup(subject, taskId, mapFiles.map((m) => m.path));
+  } else {
+    if (remainingForSubject.length === 0) delete state.subjectMaps[subject];
+    saved = await saveToGitHub(`delete task: ${subject}`);
+  }
+  if (!saved) {
+    state.tasks.splice(index, 0, t); // 保存に失敗したら元に戻す
+    if (shouldCleanupMaps) state.subjectMaps[subject] = mapFiles;
+  }
   render();
 }
 
