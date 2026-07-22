@@ -13,11 +13,9 @@
       "concierge": false,
       "conciergeDone": [
         false,
-        false,
-        false,
         false
       ],
-      "conciergeDays": 4,
+      "conciergeDays": 2,
       "subjectJudge": "",
       "opJudge": ""
     },
