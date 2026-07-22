@@ -10,7 +10,16 @@
       "correctionReq": false,
       "mapConfirmed": false,
       "duplicate": false,
-      "concierge": false
+      "concierge": false,
+      "conciergeDone": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "conciergeDays": 4,
+      "subjectJudge": "",
+      "opJudge": ""
     },
     {
       "id": "id_mrtzl8fe_802rt4",
@@ -24,7 +33,13 @@
       "correctionReq": false,
       "mapConfirmed": false,
       "duplicate": false,
-      "concierge": false
+      "concierge": false,
+      "conciergeDone": [
+        false
+      ],
+      "conciergeDays": 1,
+      "subjectJudge": "",
+      "opJudge": ""
     }
   ],
   "subjectFolders": {
