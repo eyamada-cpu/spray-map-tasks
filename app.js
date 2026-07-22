@@ -14,7 +14,15 @@ const STAGES = [
   { key: 'correctionReq', label: '修正依頼', group: 'map' },
   { key: 'mapConfirmed', label: '地図確認完', group: 'map', dividerAfter: true },
   { key: 'duplicate', label: '重複処理', group: 'final' },
-  { key: 'concierge', label: 'コンシェルジュ', group: 'final' },
+];
+
+// コンシェルジュ(散布日数に応じて1日目・2日目…と増えるチェック)と
+// 実施主体・OPの判定(○/／/△)の選択肢
+const JUDGE_OPTIONS = [
+  { v: '', label: '－' },
+  { v: 'circle', label: '○\uFE0E' },
+  { v: 'slash', label: '／\uFE0E' },
+  { v: 'triangle', label: '△\uFE0E' },
 ];
 const STAGE_GROUPS = [
   { key: 'data', label: '受付', count: 1 },
@@ -64,7 +72,27 @@ function escapeHtml(str) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
-function allStagesDone(t) { return STAGES.every((s) => t[s.key]); }
+function allStagesDone(t) {
+  const conciergeAllDone = Array.isArray(t.conciergeDone) && t.conciergeDone.length > 0 && t.conciergeDone.every(Boolean);
+  return STAGES.every((s) => t[s.key]) && conciergeAllDone;
+}
+
+// 古いデータ(コンシェルジュが単純なチェック1つだった頃)との互換性を保ちつつ、
+// conciergeDays(日数)とconciergeDone(日ごとのチェック配列)を必ず揃える。
+// 実施主体・OPの判定欄も未設定なら空文字にしておく。
+function normalizeTask(t) {
+  t.comments = t.comments || {};
+  if (!Array.isArray(t.conciergeDone)) {
+    const legacy = !!t.concierge;
+    t.conciergeDone = [legacy];
+  }
+  if (!t.conciergeDays || t.conciergeDays < 1) t.conciergeDays = t.conciergeDone.length || 1;
+  while (t.conciergeDone.length < t.conciergeDays) t.conciergeDone.push(false);
+  if (t.conciergeDone.length > t.conciergeDays) t.conciergeDone.length = t.conciergeDays;
+  if (typeof t.subjectJudge !== 'string') t.subjectJudge = '';
+  if (typeof t.opJudge !== 'string') t.opJudge = '';
+  return t;
+}
 
 function formatMD(dateStr) {
   if (!dateStr) return '-';
@@ -89,17 +117,21 @@ function b64ToUtf8(b64) {
 function sampleTasks() {
   return [
     { id: 't1', subject: 'スカイテック北関東', sprayDate: addDaysISO(3),
-      orderData: true, mapDraft: true, correctionReq: false, mapConfirmed: false, duplicate: false, concierge: false,
+      orderData: true, mapDraft: true, correctionReq: false, mapConfirmed: false, duplicate: false,
+      conciergeDays: 1, conciergeDone: [false], subjectJudge: 'circle', opJudge: '',
       comments: { mapDraft: '地図の仮完了まで進みました。' } },
     { id: 't2', subject: 'グリーンウィング栃木', sprayDate: addDaysISO(1),
-      orderData: true, mapDraft: true, correctionReq: true, mapConfirmed: true, duplicate: true, concierge: false,
+      orderData: true, mapDraft: true, correctionReq: true, mapConfirmed: true, duplicate: true,
+      conciergeDays: 2, conciergeDone: [true, false], subjectJudge: 'triangle', opJudge: 'circle',
       comments: { duplicate: '重複エリアの確認完了。コンシェルジュ対応待ちです。' } },
     { id: 't3', subject: '北関東エアサービス', sprayDate: addDaysISO(-2),
-      orderData: false, mapDraft: false, correctionReq: false, mapConfirmed: false, duplicate: false, concierge: false,
+      orderData: false, mapDraft: false, correctionReq: false, mapConfirmed: false, duplicate: false,
+      conciergeDays: 1, conciergeDone: [false], subjectJudge: '', opJudge: '',
       comments: {} },
     { id: 't4', subject: 'スカイテック北関東', sprayDate: addDaysISO(10),
-      orderData: true, mapDraft: true, correctionReq: true, mapConfirmed: true, duplicate: true, concierge: true,
-      comments: { concierge: '全工程完了しました。' } },
+      orderData: true, mapDraft: true, correctionReq: true, mapConfirmed: true, duplicate: true,
+      conciergeDays: 2, conciergeDone: [true, true], subjectJudge: 'circle', opJudge: 'circle',
+      comments: { duplicate: '全工程完了しました。' } },
   ];
 }
 
@@ -326,7 +358,7 @@ async function loadFromGitHub() {
       return;
     }
     state.tasks = (result.data && result.data.tasks) || [];
-    state.tasks.forEach((t) => { t.comments = t.comments || {}; });
+    state.tasks.forEach((t) => normalizeTask(t));
     state.subjectFolders = (result.data && result.data.subjectFolders) || {};
     state.subjectMaps = (result.data && result.data.subjectMaps) || {};
     state.sha = result.sha;
@@ -396,10 +428,14 @@ async function addTask() {
   const subject = document.getElementById('inpSubject').value.trim();
   const date = document.getElementById('inpDate').value;
   if (!subject || !date) {
-    alert('実施主体と散布実施日は必須です。');
+    alert('エリアと散布実施日は必須です。');
     return;
   }
-  const task = { id: uid(), subject, sprayDate: date, comments: {} };
+  const task = {
+    id: uid(), subject, sprayDate: date, comments: {},
+    conciergeDays: 1, conciergeDone: [false],
+    subjectJudge: '', opJudge: '',
+  };
   STAGES.forEach((s) => { task[s.key] = false; });
   state.tasks.push(task);
   document.getElementById('inpSubject').value = '';
@@ -420,6 +456,42 @@ async function toggleStage(taskId, stageKey) {
   t[stageKey] = !t[stageKey];
   const ok = await saveToGitHub(`toggle ${stageKey}: ${t.subject}`);
   if (!ok) t[stageKey] = !t[stageKey]; // 保存に失敗したら画面上も元に戻す
+  render();
+}
+
+// コンシェルジュの散布日数プルダウンを変更したとき
+async function changeConciergeDays(taskId, days) {
+  const t = findTask(taskId);
+  if (!t) return;
+  const previousDays = t.conciergeDays;
+  const previousDone = t.conciergeDone.slice();
+  t.conciergeDays = days;
+  const done = t.conciergeDone.slice(0, days);
+  while (done.length < days) done.push(false);
+  t.conciergeDone = done;
+  const ok = await saveToGitHub(`concierge days: ${t.subject}`);
+  if (!ok) { t.conciergeDays = previousDays; t.conciergeDone = previousDone; }
+  render();
+}
+
+// コンシェルジュの「n日目」チェックをON/OFF
+async function toggleConciergeDay(taskId, dayIndex) {
+  const t = findTask(taskId);
+  if (!t) return;
+  t.conciergeDone[dayIndex] = !t.conciergeDone[dayIndex];
+  const ok = await saveToGitHub(`concierge day ${dayIndex + 1}: ${t.subject}`);
+  if (!ok) t.conciergeDone[dayIndex] = !t.conciergeDone[dayIndex];
+  render();
+}
+
+// 実施主体・OPの判定(○/／/△)を変更したとき
+async function setJudge(taskId, field, value) {
+  const t = findTask(taskId);
+  if (!t) return;
+  const previous = t[field];
+  t[field] = value;
+  const ok = await saveToGitHub(`${field}: ${t.subject}`);
+  if (!ok) t[field] = previous;
   render();
 }
 
@@ -467,20 +539,53 @@ function stageCellHtml(t, stage) {
   `;
 }
 
+// コンシェルジュ: 散布日数をプルダウンで選び、その日数分だけ
+// 「1日目」「2日目」…のチェックがその場で増減する
+function conciergeCellHtml(t) {
+  const dayOptions = [1, 2, 3, 4, 5].map((n) =>
+    `<option value="${n}" ${t.conciergeDays === n ? 'selected' : ''}>${n}日</option>`
+  ).join('');
+  const checks = t.conciergeDone.map((done, i) => `
+    <div class="concierge-day">
+      <div class="stage-box ${done ? 'on' : ''}" data-task="${t.id}" data-day="${i}">${done ? '✓' : ''}</div>
+      <span>${i + 1}日目</span>
+    </div>
+  `).join('');
+  return `
+    <td class="divider-after">
+      <select class="concierge-days-select" data-task="${t.id}">${dayOptions}</select>
+      <div class="concierge-days">${checks}</div>
+    </td>
+  `;
+}
+
+// 実施主体・OP: ○/／/△をプルダウンで選ぶ判定欄
+function judgeSelectHtml(taskId, field, value) {
+  const v = value || '';
+  return `
+    <select class="judge-select" data-task="${escapeHtml(taskId)}" data-field="${field}">
+      ${JUDGE_OPTIONS.map((o) => `<option value="${o.v}" ${v === o.v ? 'selected' : ''}>${o.label}</option>`).join('')}
+    </select>
+  `;
+}
+
 function renderList() {
   const container = document.getElementById('listContainer');
   if (state.tasks.length === 0) {
     container.innerHTML = '<p style="padding:20px;color:var(--color-muted);">案件がありません。上のフォームから登録してください。</p>';
     return;
   }
+  state.tasks.forEach((t) => normalizeTask(t));
   const sorted = state.tasks.slice().sort((a, b) => (a.sprayDate || '').localeCompare(b.sprayDate || ''));
 
   const groupRowCells = STAGE_GROUPS.map((g) =>
     `<th colspan="${g.count}" class="group-${g.key}">${escapeHtml(g.label)}</th>`
   ).join('');
+  // 最終確認グループには、重複処理(STAGESの通常チェック)に続けて
+  // コンシェルジュ(日数プルダウン+日ごとのチェック)の見出しを手動で追加する。
   const labelRowCells = STAGES.map((s) =>
     `<th class="group-${s.group} ${s.dividerAfter ? 'divider-after' : ''}">${escapeHtml(s.label)}</th>`
-  ).join('');
+  ).join('') + `<th class="group-final divider-after">コンシェルジュ</th>`;
 
   const rows = sorted.map((t) => {
     const d = daysUntil(t.sprayDate);
@@ -492,6 +597,9 @@ function renderList() {
           <button class="subject-pill subject-pill-btn" data-subject="${escapeHtml(t.subject)}" title="地図データを見る・アップロードする">${escapeHtml(t.subject)}${mapCountBadgeHtml(t.subject)}</button>
         </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
+        ${conciergeCellHtml(t)}
+        <td>${judgeSelectHtml(t.id, 'subjectJudge', t.subjectJudge)}</td>
+        <td>${judgeSelectHtml(t.id, 'opJudge', t.opJudge)}</td>
         <td class="spray-date ${urgent ? 'urgent' : ''} ${overdue ? 'overdue-text' : ''}">${formatMD(t.sprayDate)}</td>
         <td style="text-align:center;">
           <button class="btn-delete-task" data-task="${t.id}" title="タスクを削除">×</button>
@@ -504,25 +612,38 @@ function renderList() {
     <table class="task-table">
       <thead>
         <tr class="group-row">
-          <th rowspan="2" class="col-subject">実施主体</th>
+          <th rowspan="2" class="col-subject">エリア</th>
           ${groupRowCells}
+          <th colspan="2" class="group-assign">担当区割当</th>
           <th rowspan="2">散布実施日</th>
           <th rowspan="2"></th>
         </tr>
         <tr class="label-row">
           ${labelRowCells}
+          <th class="group-assign">実施主体</th>
+          <th class="group-assign">OP</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
   `;
 
-  container.querySelectorAll('.stage-box').forEach((box) => {
+  container.querySelectorAll('.stage-cellwrap .stage-box').forEach((box) => {
     box.addEventListener('click', () => toggleStage(box.dataset.task, box.dataset.stage));
     box.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       editStageComment(box.dataset.task, box.dataset.stage);
     });
+  });
+
+  container.querySelectorAll('.concierge-days-select').forEach((sel) => {
+    sel.addEventListener('change', () => changeConciergeDays(sel.dataset.task, Number(sel.value)));
+  });
+  container.querySelectorAll('.concierge-days .stage-box').forEach((box) => {
+    box.addEventListener('click', () => toggleConciergeDay(box.dataset.task, Number(box.dataset.day)));
+  });
+  container.querySelectorAll('.judge-select').forEach((sel) => {
+    sel.addEventListener('change', () => setJudge(sel.dataset.task, sel.dataset.field, sel.value));
   });
 
   container.querySelectorAll('.subject-pill-btn').forEach((btn) => {
