@@ -77,21 +77,51 @@ function allStagesDone(t) {
   return STAGES.every((s) => t[s.key]) && conciergeAllDone;
 }
 
-// 古いデータ(コンシェルジュが単純なチェック1つだった頃)との互換性を保ちつつ、
-// conciergeDays(日数)とconciergeDone(日ごとのチェック配列)を必ず揃える。
-// 実施主体・OPの判定欄も未設定なら空文字にしておく。
+// 古いデータ(散布実施日が1つだけ・コンシェルジュが単純なチェック1つだった頃)
+// との互換性を保ちつつ、以下を必ず揃える。
+//   ・sprayDates: 散布実施日の配列(最大3日)
+//   ・conciergeDone: 散布実施日の日数と同じ長さのチェック配列(コンシェルジュは
+//     散布実施日の日数にそのまま連動するため、独立した日数は持たない)
+//   ・subjectJudge / opJudge: 実施主体・OPの判定欄(未設定なら空文字)
 function normalizeTask(t) {
   t.comments = t.comments || {};
+  if (!Array.isArray(t.sprayDates)) {
+    t.sprayDates = t.sprayDate ? [t.sprayDate] : [];
+  }
+  if (t.sprayDates.length === 0) t.sprayDates = [''];
+  if (t.sprayDates.length > 3) t.sprayDates = t.sprayDates.slice(0, 3);
   if (!Array.isArray(t.conciergeDone)) {
     const legacy = !!t.concierge;
     t.conciergeDone = [legacy];
   }
-  if (!t.conciergeDays || t.conciergeDays < 1) t.conciergeDays = t.conciergeDone.length || 1;
-  while (t.conciergeDone.length < t.conciergeDays) t.conciergeDone.push(false);
-  if (t.conciergeDone.length > t.conciergeDays) t.conciergeDone.length = t.conciergeDays;
+  const n = t.sprayDates.length;
+  const done = t.conciergeDone.slice(0, n);
+  while (done.length < n) done.push(false);
+  t.conciergeDone = done;
   if (typeof t.subjectJudge !== 'string') t.subjectJudge = '';
   if (typeof t.opJudge !== 'string') t.opJudge = '';
   return t;
+}
+
+// 「一番近い、まだ来ていない散布日」を並び替えの基準にする。
+// 当日になったらその日は「まだ来ていない」に含めないので、
+// 当日を迎えた時点で自動的に次の散布日を基準に並び替わる。
+// 全て過ぎている場合は最後の散布日を基準にする(最後尾になる)。
+function effectiveSortDate(dates) {
+  const today = todayISO();
+  const valid = (dates || []).filter(Boolean);
+  if (valid.length === 0) return '9999-12-31';
+  const upcoming = valid.filter((d) => d > today).sort();
+  if (upcoming.length > 0) return upcoming[0];
+  return valid.slice().sort().pop();
+}
+
+// 最後の散布日(=一番遅い日付)を迎えたら(当日を含む)グレーアウトする。
+function isAllDatesReached(dates) {
+  const today = todayISO();
+  const valid = (dates || []).filter(Boolean);
+  if (valid.length === 0) return false;
+  return valid.every((d) => d <= today);
 }
 
 function formatMD(dateStr) {
@@ -116,21 +146,21 @@ function b64ToUtf8(b64) {
 
 function sampleTasks() {
   return [
-    { id: 't1', subject: 'スカイテック北関東', sprayDate: addDaysISO(3),
+    { id: 't1', subject: 'スカイテック北関東', sprayDates: [addDaysISO(3)],
       orderData: true, mapDraft: true, correctionReq: false, mapConfirmed: false, duplicate: false,
-      conciergeDays: 1, conciergeDone: [false], subjectJudge: 'circle', opJudge: '',
+      conciergeDone: [false], subjectJudge: 'circle', opJudge: '',
       comments: { mapDraft: '地図の仮完了まで進みました。' } },
-    { id: 't2', subject: 'グリーンウィング栃木', sprayDate: addDaysISO(1),
+    { id: 't2', subject: 'グリーンウィング栃木', sprayDates: [addDaysISO(0), addDaysISO(1)],
       orderData: true, mapDraft: true, correctionReq: true, mapConfirmed: true, duplicate: true,
-      conciergeDays: 2, conciergeDone: [true, false], subjectJudge: 'triangle', opJudge: 'circle',
+      conciergeDone: [true, false], subjectJudge: 'triangle', opJudge: 'circle',
       comments: { duplicate: '重複エリアの確認完了。コンシェルジュ対応待ちです。' } },
-    { id: 't3', subject: '北関東エアサービス', sprayDate: addDaysISO(-2),
+    { id: 't3', subject: '北関東エアサービス', sprayDates: [addDaysISO(-2)],
       orderData: false, mapDraft: false, correctionReq: false, mapConfirmed: false, duplicate: false,
-      conciergeDays: 1, conciergeDone: [false], subjectJudge: '', opJudge: '',
+      conciergeDone: [false], subjectJudge: '', opJudge: '',
       comments: {} },
-    { id: 't4', subject: 'スカイテック北関東', sprayDate: addDaysISO(10),
+    { id: 't4', subject: 'スカイテック北関東', sprayDates: [addDaysISO(-9), addDaysISO(-8), addDaysISO(10)],
       orderData: true, mapDraft: true, correctionReq: true, mapConfirmed: true, duplicate: true,
-      conciergeDays: 2, conciergeDone: [true, true], subjectJudge: 'circle', opJudge: 'circle',
+      conciergeDone: [true, true, false], subjectJudge: 'circle', opJudge: 'circle',
       comments: { duplicate: '全工程完了しました。' } },
   ];
 }
@@ -424,22 +454,35 @@ async function saveToGitHubNow(message) {
 
 function findTask(id) { return state.tasks.find((t) => t.id === id); }
 
+// 追加フォームの「散布日数」プルダウンに合わせて、その数だけ日付欄を出す
+function renderAddDateInputs() {
+  const n = Number(document.getElementById('inpDaysSelect').value);
+  const wrap = document.getElementById('inpDatesWrap');
+  wrap.innerHTML = Array.from({ length: n }, (_, i) => `
+    <label>${i + 1}日目の散布日
+      <input type="date" class="inp-date-day" data-day="${i}">
+    </label>
+  `).join('');
+}
+
 async function addTask() {
   const subject = document.getElementById('inpSubject').value.trim();
-  const date = document.getElementById('inpDate').value;
-  if (!subject || !date) {
+  const dateInputs = Array.from(document.querySelectorAll('.inp-date-day'));
+  const sprayDates = dateInputs.map((inp) => inp.value).filter(Boolean);
+  if (!subject || sprayDates.length === 0) {
     alert('エリアと散布実施日は必須です。');
     return;
   }
   const task = {
-    id: uid(), subject, sprayDate: date, comments: {},
-    conciergeDays: 1, conciergeDone: [false],
+    id: uid(), subject, sprayDates, comments: {},
+    conciergeDone: sprayDates.map(() => false),
     subjectJudge: '', opJudge: '',
   };
   STAGES.forEach((s) => { task[s.key] = false; });
   state.tasks.push(task);
   document.getElementById('inpSubject').value = '';
-  document.getElementById('inpDate').value = '';
+  document.getElementById('inpDaysSelect').value = '1';
+  renderAddDateInputs();
   const ok = await saveToGitHub(`add task: ${subject}`);
   if (!ok) {
     // 保存に失敗したものを画面に残すと「見た目は追加されているのに実は
@@ -459,18 +502,30 @@ async function toggleStage(taskId, stageKey) {
   render();
 }
 
-// コンシェルジュの散布日数プルダウンを変更したとき
-async function changeConciergeDays(taskId, days) {
+// 散布実施日の日数プルダウンを変更したとき
+// (コンシェルジュのチェック数はこの日数にそのまま連動する)
+async function changeSprayDatesCount(taskId, n) {
   const t = findTask(taskId);
   if (!t) return;
-  const previousDays = t.conciergeDays;
+  const previousDates = t.sprayDates.slice();
   const previousDone = t.conciergeDone.slice();
-  t.conciergeDays = days;
-  const done = t.conciergeDone.slice(0, days);
-  while (done.length < days) done.push(false);
-  t.conciergeDone = done;
-  const ok = await saveToGitHub(`concierge days: ${t.subject}`);
-  if (!ok) { t.conciergeDays = previousDays; t.conciergeDone = previousDone; }
+  const dates = t.sprayDates.slice(0, n);
+  while (dates.length < n) dates.push('');
+  t.sprayDates = dates;
+  normalizeTask(t); // conciergeDoneを新しい日数に合わせて揃える
+  const ok = await saveToGitHub(`spray dates count: ${t.subject}`);
+  if (!ok) { t.sprayDates = previousDates; t.conciergeDone = previousDone; }
+  render();
+}
+
+// 散布実施日の「n日目」の日付を変更したとき
+async function setSprayDate(taskId, dayIndex, value) {
+  const t = findTask(taskId);
+  if (!t) return;
+  const previous = t.sprayDates[dayIndex];
+  t.sprayDates[dayIndex] = value;
+  const ok = await saveToGitHub(`spray date ${dayIndex + 1}: ${t.subject}`);
+  if (!ok) t.sprayDates[dayIndex] = previous;
   render();
 }
 
@@ -539,22 +594,38 @@ function stageCellHtml(t, stage) {
   `;
 }
 
-// コンシェルジュ: 散布日数をプルダウンで選び、その日数分だけ
-// 「1日目」「2日目」…のチェックがその場で増減する
+// コンシェルジュ: チェックの数は散布実施日の日数にそのまま連動する
+// (コンシェルジュ側には独立した日数プルダウンは持たない)
 function conciergeCellHtml(t) {
-  const dayOptions = [1, 2, 3, 4, 5].map((n) =>
-    `<option value="${n}" ${t.conciergeDays === n ? 'selected' : ''}>${n}日</option>`
-  ).join('');
   const checks = t.conciergeDone.map((done, i) => `
     <div class="concierge-day">
       <div class="stage-box ${done ? 'on' : ''}" data-task="${t.id}" data-day="${i}">${done ? '✓' : ''}</div>
       <span>${i + 1}日目</span>
     </div>
   `).join('');
+  return `<td class="divider-after"><div class="concierge-days">${checks}</div></td>`;
+}
+
+// 散布実施日: 日数プルダウン(最大3日)+その数だけの日付欄。
+// あとから日数・日付とも変更できる。
+function sprayDatesCellHtml(t) {
+  const dayOptions = [1, 2, 3].map((n) =>
+    `<option value="${n}" ${t.sprayDates.length === n ? 'selected' : ''}>${n}日</option>`
+  ).join('');
+  const today = todayISO();
+  const rows = t.sprayDates.map((d, i) => {
+    const isPast = !!d && d < today;
+    return `
+      <div class="spray-date-row ${isPast ? 'is-past' : ''}">
+        <span>${i + 1}日目</span>
+        <input type="date" data-task="${t.id}" data-day="${i}" value="${d || ''}">
+      </div>
+    `;
+  }).join('');
   return `
-    <td class="divider-after">
-      <select class="concierge-days-select" data-task="${t.id}">${dayOptions}</select>
-      <div class="concierge-days">${checks}</div>
+    <td>
+      <select class="spray-dates-select" data-task="${t.id}">${dayOptions}</select>
+      <div class="spray-dates-list">${rows}</div>
     </td>
   `;
 }
@@ -576,21 +647,21 @@ function renderList() {
     return;
   }
   state.tasks.forEach((t) => normalizeTask(t));
-  const sorted = state.tasks.slice().sort((a, b) => (a.sprayDate || '').localeCompare(b.sprayDate || ''));
+  const sorted = state.tasks.slice().sort((a, b) =>
+    effectiveSortDate(a.sprayDates).localeCompare(effectiveSortDate(b.sprayDates))
+  );
 
   const groupRowCells = STAGE_GROUPS.map((g) =>
     `<th colspan="${g.count}" class="group-${g.key}">${escapeHtml(g.label)}</th>`
   ).join('');
   // 最終確認グループには、重複処理(STAGESの通常チェック)に続けて
-  // コンシェルジュ(日数プルダウン+日ごとのチェック)の見出しを手動で追加する。
+  // コンシェルジュ(散布実施日の日数に連動したチェック)の見出しを手動で追加する。
   const labelRowCells = STAGES.map((s) =>
     `<th class="group-${s.group} ${s.dividerAfter ? 'divider-after' : ''}">${escapeHtml(s.label)}</th>`
   ).join('') + `<th class="group-final divider-after">コンシェルジュ</th>`;
 
   const rows = sorted.map((t) => {
-    const d = daysUntil(t.sprayDate);
-    const urgent = d !== null && d <= 3 && d >= 0;
-    const overdue = d !== null && d < 0;
+    const overdue = isAllDatesReached(t.sprayDates);
     return `
       <tr class="${overdue ? 'row-overdue' : ''}">
         <td class="col-subject">
@@ -600,7 +671,7 @@ function renderList() {
         ${conciergeCellHtml(t)}
         <td>${judgeSelectHtml(t.id, 'subjectJudge', t.subjectJudge)}</td>
         <td>${judgeSelectHtml(t.id, 'opJudge', t.opJudge)}</td>
-        <td class="spray-date ${urgent ? 'urgent' : ''} ${overdue ? 'overdue-text' : ''}">${formatMD(t.sprayDate)}</td>
+        ${sprayDatesCellHtml(t)}
         <td style="text-align:center;">
           <button class="btn-delete-task" data-task="${t.id}" title="タスクを削除">×</button>
         </td>
@@ -636,11 +707,14 @@ function renderList() {
     });
   });
 
-  container.querySelectorAll('.concierge-days-select').forEach((sel) => {
-    sel.addEventListener('change', () => changeConciergeDays(sel.dataset.task, Number(sel.value)));
-  });
   container.querySelectorAll('.concierge-days .stage-box').forEach((box) => {
     box.addEventListener('click', () => toggleConciergeDay(box.dataset.task, Number(box.dataset.day)));
+  });
+  container.querySelectorAll('.spray-dates-select').forEach((sel) => {
+    sel.addEventListener('change', () => changeSprayDatesCount(sel.dataset.task, Number(sel.value)));
+  });
+  container.querySelectorAll('.spray-date-row input[type="date"]').forEach((inp) => {
+    inp.addEventListener('change', () => setSprayDate(inp.dataset.task, Number(inp.dataset.day), inp.value));
   });
   container.querySelectorAll('.judge-select').forEach((sel) => {
     sel.addEventListener('change', () => setJudge(sel.dataset.task, sel.dataset.field, sel.value));
@@ -848,8 +922,11 @@ function renderCalendar() {
 
   const tasksByDate = {};
   for (const t of state.tasks) {
-    if (!t.sprayDate) continue;
-    (tasksByDate[t.sprayDate] = tasksByDate[t.sprayDate] || []).push(t);
+    normalizeTask(t);
+    for (const ds of t.sprayDates) {
+      if (!ds) continue;
+      (tasksByDate[ds] = tasksByDate[ds] || []).push(t);
+    }
   }
 
   const cells = [];
@@ -882,7 +959,7 @@ function renderCalendar() {
 
 function openCalendarDayPanel(dateStr) {
   const panel = document.getElementById('calendarDayPanel');
-  const tasks = state.tasks.filter((t) => t.sprayDate === dateStr);
+  const tasks = state.tasks.filter((t) => (t.sprayDates || []).includes(dateStr));
   panel.hidden = false;
   if (tasks.length === 0) {
     panel.innerHTML = `<h3>${dateStr}</h3><p style="color:var(--color-muted);">この日の案件はありません。</p>`;
@@ -992,6 +1069,8 @@ function bindEvents() {
   });
 
   document.getElementById('btnAdd').addEventListener('click', addTask);
+  document.getElementById('inpDaysSelect').addEventListener('change', renderAddDateInputs);
+  renderAddDateInputs();
 
   document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
   document.getElementById('btnSettingsCancel').addEventListener('click', closeSettingsModal);
