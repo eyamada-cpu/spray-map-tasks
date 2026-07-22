@@ -33,7 +33,7 @@
       "duplicate": false,
       "concierge": false,
       "conciergeDone": [
-        false
+        true
       ],
       "conciergeDays": 1,
       "subjectJudge": "",
