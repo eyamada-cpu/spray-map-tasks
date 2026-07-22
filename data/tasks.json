@@ -63,24 +63,6 @@
       "correctionReq": false,
       "mapConfirmed": false,
       "duplicate": false
-    },
-    {
-      "id": "id_mrvlnimj_ex4rze",
-      "subject": "い1",
-      "sprayDates": [
-        "2026-07-23"
-      ],
-      "comments": {},
-      "conciergeDone": [
-        false
-      ],
-      "subjectJudge": "",
-      "opJudge": "",
-      "orderData": false,
-      "mapDraft": false,
-      "correctionReq": false,
-      "mapConfirmed": false,
-      "duplicate": false
     }
   ],
   "subjectFolders": {
