@@ -193,6 +193,7 @@ table.task-table thead .group-row th {
 table.task-table thead .group-row th.group-data { color: #3d6fa3; }
 table.task-table thead .group-row th.group-map { color: #1f8a5c; }
 table.task-table thead .group-row th.group-final { color: #7a3ed6; }
+table.task-table thead .group-row th.group-assign { color: #c47a12; }
 table.task-table thead .label-row th {
   background: var(--color-surface-2);
   padding: 10px 8px;
@@ -203,6 +204,7 @@ table.task-table thead .label-row th {
 table.task-table thead .label-row th.group-data { border-top-color: #3d6fa3; }
 table.task-table thead .label-row th.group-map { border-top-color: #1f8a5c; }
 table.task-table thead .label-row th.group-final { border-top-color: #7a3ed6; }
+table.task-table thead .label-row th.group-assign { border-top-color: #c47a12; }
 table.task-table th.col-subject { text-align: left; padding-left: 16px; }
 table.task-table td {
   padding: 10px 8px;
@@ -517,6 +519,42 @@ table.task-table td.spray-date.urgent { color: var(--color-danger); font-weight:
   padding: 0;
 }
 .map-item-actions .btn-map-delete:hover { text-decoration: underline; background: transparent; }
+
+/* コンシェルジュ(日数プルダウン+日ごとのチェック) */
+.concierge-days-select {
+  font-size: 12.5px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+}
+.concierge-days {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.concierge-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 10.5px;
+  color: var(--color-muted);
+  gap: 2px;
+}
+.concierge-day .stage-box { width: 34px; height: 30px; font-size: 14px; }
+
+/* 実施主体・OPの判定(○/／/△)プルダウン */
+.judge-select {
+  font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", "MS Gothic", "Noto Sans JP", sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  width: 58px;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
 
 @media (max-width: 720px) {
   .stage-box { width: 34px; height: 32px; font-size: 13px; }
