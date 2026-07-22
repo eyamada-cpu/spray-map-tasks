@@ -12,12 +12,14 @@
       "duplicate": false,
       "concierge": false,
       "conciergeDone": [
-        false,
         false
       ],
       "conciergeDays": 2,
       "subjectJudge": "",
-      "opJudge": ""
+      "opJudge": "",
+      "sprayDates": [
+        "2026-07-22"
+      ]
     },
     {
       "id": "id_mrtzl8fe_802rt4",
@@ -37,7 +39,10 @@
       ],
       "conciergeDays": 1,
       "subjectJudge": "",
-      "opJudge": ""
+      "opJudge": "",
+      "sprayDates": [
+        "2026-07-28"
+      ]
     }
   ],
   "subjectFolders": {
