@@ -647,9 +647,12 @@ function renderList() {
     return;
   }
   state.tasks.forEach((t) => normalizeTask(t));
-  const sorted = state.tasks.slice().sort((a, b) =>
-    effectiveSortDate(a.sprayDates).localeCompare(effectiveSortDate(b.sprayDates))
-  );
+  // 同じ日付どうしはエリア名のあいうえお順で並べる
+  const sorted = state.tasks.slice().sort((a, b) => {
+    const dateCompare = effectiveSortDate(a.sprayDates).localeCompare(effectiveSortDate(b.sprayDates));
+    if (dateCompare !== 0) return dateCompare;
+    return (a.subject || '').localeCompare(b.subject || '', 'ja');
+  });
 
   const groupRowCells = STAGE_GROUPS.map((g) =>
     `<th colspan="${g.count}" class="group-${g.key}">${escapeHtml(g.label)}</th>`
