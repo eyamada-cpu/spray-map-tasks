@@ -430,6 +430,17 @@ table.task-table td.spray-date.urgent { color: var(--color-danger); font-weight:
   font-weight: 600;
   color: #3d6fa3;
 }
+.urgent-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fbe6e5;
+  color: var(--color-danger);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 .map-preview-grid {
   display: grid;
