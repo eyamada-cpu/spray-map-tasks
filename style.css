@@ -549,7 +549,16 @@ table.task-table td.spray-date.urgent { color: var(--color-danger); font-weight:
   border-radius: 4px;
   width: 118px;
 }
-.spray-date-row.is-past { text-decoration: line-through; opacity: 0.55; }
+.spray-date-row.is-past {
+  position: relative;
+  opacity: 0.6;
+  filter: grayscale(70%);
+  background-image: linear-gradient(to top right,
+    transparent calc(50% - 0.75px),
+    var(--color-muted) calc(50% - 0.75px),
+    var(--color-muted) calc(50% + 0.75px),
+    transparent calc(50% + 0.75px));
+}
 
 /* コンシェルジュ(散布実施日の日数にそのまま連動するチェック) */
 .concierge-days {
