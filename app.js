@@ -668,7 +668,7 @@ function renderList() {
     return `
       <tr class="${overdue ? 'row-overdue' : ''}">
         <td class="col-subject">
-          <button class="subject-pill subject-pill-btn" data-subject="${escapeHtml(t.subject)}" title="地図データを見る・アップロードする">${escapeHtml(t.subject)}${mapCountBadgeHtml(t.subject)}</button>
+          <button class="subject-pill subject-pill-btn" data-subject="${escapeHtml(t.subject)}" title="地図データを見る・アップロードする">${escapeHtml(t.subject)}${mapCountBadgeHtml(t.subject)}</button>${urgentBadgeHtml(t)}
         </td>
         ${STAGES.map((s) => stageCellHtml(t, s)).join('')}
         ${conciergeCellHtml(t)}
@@ -738,6 +738,15 @@ function mapCountBadgeHtml(subject) {
   const count = (state.subjectMaps[subject] || []).length;
   if (count === 0) return '';
   return ` <span class="map-count-badge">📷${count}</span>`;
+}
+
+// 一番近い散布日の3日前(当日含む)から、エリア名の横に赤字で残り日数を表示する
+function urgentBadgeHtml(t) {
+  const effDate = effectiveSortDate(t.sprayDates);
+  if (effDate === '9999-12-31') return '';
+  const d = daysUntil(effDate);
+  if (d === null || d < 0 || d > 3) return '';
+  return ` <span class="urgent-badge">残り${d}日</span>`;
 }
 
 let mapPreviewEditingSubject = null;
