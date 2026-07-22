@@ -57,7 +57,7 @@
         false
       ],
       "subjectJudge": "",
-      "opJudge": "slash",
+      "opJudge": "circle",
       "orderData": false,
       "mapDraft": false,
       "correctionReq": false,
