@@ -76,7 +76,7 @@
       ],
       "subjectJudge": "",
       "opJudge": "",
-      "orderData": false,
+      "orderData": true,
       "mapDraft": false,
       "correctionReq": false,
       "mapConfirmed": false,
