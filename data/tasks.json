@@ -95,7 +95,7 @@
       "subjectJudge": "",
       "opJudge": "",
       "orderData": false,
-      "mapDraft": false,
+      "mapDraft": true,
       "correctionReq": false,
       "mapConfirmed": false,
       "duplicate": false
