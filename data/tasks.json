@@ -96,7 +96,7 @@
       "opJudge": "",
       "orderData": false,
       "mapDraft": true,
-      "correctionReq": false,
+      "correctionReq": true,
       "mapConfirmed": false,
       "duplicate": false
     }
