@@ -77,7 +77,7 @@
       "subjectJudge": "",
       "opJudge": "",
       "orderData": false,
-      "mapDraft": true,
+      "mapDraft": false,
       "correctionReq": false,
       "mapConfirmed": false,
       "duplicate": false
@@ -95,7 +95,7 @@
       "subjectJudge": "",
       "opJudge": "",
       "orderData": false,
-      "mapDraft": false,
+      "mapDraft": true,
       "correctionReq": false,
       "mapConfirmed": false,
       "duplicate": false
