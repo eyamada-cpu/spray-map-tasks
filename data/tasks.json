@@ -97,7 +97,7 @@
       "orderData": false,
       "mapDraft": false,
       "correctionReq": false,
-      "mapConfirmed": false,
+      "mapConfirmed": true,
       "duplicate": false
     }
   ],
